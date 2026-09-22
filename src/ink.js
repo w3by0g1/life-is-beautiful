@@ -52,8 +52,8 @@ const SPLAT_STOP = 60
 const SPLAT_AMOUNT = 1
 // Lifespan: seconds each stroke stays at full strength from when it's drawn (0
 // = forever), then how many seconds it takes to fade away.
-const INK_LIFESPAN = 300
-const INK_FADE = 3
+export const INK_LIFESPAN = 600
+export const INK_FADE = 3
 // Bleeding: after ink lands it slowly spreads into the paper as a pale, diluted
 // halo. BLEED scales it (0 = off); BLEED_SPREAD is how far it creeps (fraction
 // of the nib), over BLEED_TIME seconds (fast at first, then slowing); the halo
@@ -142,8 +142,11 @@ export function createInk() {
     inkLifespan: { value: INK_LIFESPAN > 0 ? INK_LIFESPAN : 1e9 },
     inkFade: { value: Math.max(0.01, INK_FADE) },
   }
-  // Scene time in seconds (pauses with the page).
-  let now = 0
+  // Scene time in seconds (pauses with the page), plus a head start of a whole
+  // lifespan, so a stroke that arrives already old (someone else's, drawn
+  // before this page opened) still has a time to record.
+  const HEADROOM = INK_LIFESPAN + INK_FADE + 10
+  let now = HEADROOM
   // Steps subtracted so far by `rebase`.
   let ageBase = 0
   const ageStepAt = (t) => Math.floor(t / AGE_STEP) - ageBase
@@ -165,6 +168,8 @@ export function createInk() {
   let ageReach = 0
 
   let px = 1
+  // Where the logo sits on the canvas (see resize).
+  let logoAnchor = null
   let patternTile = null
   let patterns = new WeakMap()
   // The core's halftone fill, for the context being drawn on.
@@ -230,7 +235,9 @@ export function createInk() {
     const cell = Math.max(2, Math.round(DOT_CELL * px))
     const tile = document.createElement('canvas')
     tile.width = tile.height = cell
-    const t = tile.getContext('2d')
+    // In CPU memory like the ink canvases it fills: a GPU canvas here would be
+    // read back from the GPU every frame, stalling it until the frame is done.
+    const t = tile.getContext('2d', { willReadFrequently: true })
     t.fillStyle = INK_CORE
     t.fillRect(0, 0, cell, cell)
     t.fillStyle = INK_DOT
@@ -306,8 +313,9 @@ export function createInk() {
   }
   // Records the pen's direction of travel (dx, dy) over a shape: the ink itself
   // takes this stroke's direction; the band around it (for the soft edge) only
-  // where no stroke has claimed it yet.
-  const stampDir = (path, dx, dy) => {
+  // where no stroke has claimed it yet. width: extra stroke width (canvas px)
+  // around the shape; fill: false for a line (just stroked).
+  const stampDir = (path, dx, dy, width = 0, fill = true) => {
     const len = Math.hypot(dx, dy)
     if (len < 1e-3) {
       dx = stroke.dirX
@@ -321,20 +329,21 @@ export function createInk() {
     dirCtx.fillStyle = dirCtx.strokeStyle = `rgb(${r},${g},0)`
     dirCtx.lineJoin = dirCtx.lineCap = 'round'
     dirCtx.globalCompositeOperation = 'destination-over'
-    dirCtx.lineWidth = 2 * DIR_REACH * px
+    dirCtx.lineWidth = width + 2 * DIR_REACH * px
     path(dirCtx)
-    dirCtx.fill()
+    if (fill) dirCtx.fill()
     dirCtx.stroke()
     dirCtx.globalCompositeOperation = 'source-over'
-    dirCtx.lineWidth = 2 * px
+    dirCtx.lineWidth = width + 2 * px
     path(dirCtx)
-    dirCtx.fill()
+    if (fill) dirCtx.fill()
     dirCtx.stroke()
   }
 
   // Records the stroke's age over a shape (drawn a little wider than the ink,
-  // so the whole of it, edges included, gets an age).
-  const stampAge = (path, width) => {
+  // so the whole of it, edges included, gets an age). width: stroke width
+  // (canvas px) around the shape; fill: false for a line (just stroked).
+  const stampAge = (path, width, fill = true) => {
     const style = `rgb(${current ? current.born : ageStepAt(now)},0,0)`
     ageCtx.fillStyle = style
     ageCtx.strokeStyle = style
@@ -345,7 +354,7 @@ export function createInk() {
     ageCtx.globalCompositeOperation = 'destination-over'
     ageCtx.lineWidth = width + 4 + ageReach * 2
     path(ageCtx)
-    ageCtx.fill()
+    if (fill) ageCtx.fill()
     ageCtx.stroke()
     // The ink itself is newest: it's painted over whatever was under it. One
     // age texel wider than the ink, so the blended rim of this shape lands
@@ -353,7 +362,7 @@ export function createInk() {
     ageCtx.globalCompositeOperation = 'source-over'
     ageCtx.lineWidth = width + 4
     path(ageCtx)
-    ageCtx.fill()
+    if (fill) ageCtx.fill()
     ageCtx.stroke()
   }
 
@@ -478,8 +487,8 @@ export function createInk() {
     ctx.stroke()
     ctx.globalCompositeOperation = 'source-over'
 
-    stampDir((c) => quadPath(c, x0, y0, x1, y1, nx, ny, 1), x1 - x0, y1 - y0)
-    stampAge((c) => quadPath(c, x0, y0, x1, y1, nx, ny, 1), 2.6 * px)
+    // (Its age and direction are recorded once per stretch of the stroke; see
+    // drawCurve.)
     const pad = Math.abs(nx) + Math.abs(ny) + (4 + DIR_REACH) * px + ageReach
     const bx0 = Math.min(x0, x1) - pad
     const by0 = Math.min(y0, y1) - pad
@@ -487,6 +496,7 @@ export function createInk() {
     const by1 = Math.max(y0, y1) + pad
     markDirty(bx0, by0, bx1, by1)
     rememberStep(x0, y0, x1, y1, half, bx0, by0, bx1, by1)
+    return half
   }
 
   // An ink blot: a wobbly pool with a deeper-coloured middle and the red edge.
@@ -642,14 +652,32 @@ export function createInk() {
     const len = Math.hypot(p2.x - p1.x, p2.y - p1.y)
     const steps = Math.max(1, Math.ceil((len * 1.15) / (1.5 * px)))
     let prev = p1
+    const trail = [p1]
+    let widest = 0
     for (let i = 1; i <= steps; i++) {
       const u = i / steps
       const q = splinePoint(p0, p1, p2, p3, u)
-      stamp(prev.x, prev.y, q.x, q.y, p1.w + (p2.w - p1.w) * u)
+      widest = Math.max(widest, stamp(prev.x, prev.y, q.x, q.y, p1.w + (p2.w - p1.w) * u))
+      trail.push(q)
       prev = q
     }
+    // The stretch's age and direction, as one line as wide as the nib reached
+    // (these maps are coarse and padded, so they needn't follow each step).
+    recordTrail(trail, widest, p2.x - p1.x, p2.y - p1.y)
     stroke.sx = p2.x
     stroke.sy = p2.y
+  }
+  // Records age and direction along a line of points (canvas px) swept by a
+  // nib reaching `half` either side, travelling (dx, dy).
+  const recordTrail = (points, half, dx, dy) => {
+    const line = (c) => {
+      c.beginPath()
+      c.moveTo(points[0].x, points[0].y)
+      for (let i = 1; i < points.length; i++) c.lineTo(points[i].x, points[i].y)
+    }
+    const width = 2 * half + 2.6 * px
+    stampDir(line, dx, dy, width, false)
+    stampAge(line, width, false)
   }
 
   // Draws the last stretch up to the newest point, bending only from behind
@@ -808,12 +836,16 @@ export function createInk() {
       return canvas.height
     },
 
-    // Match the paper's texture size, keeping any ink already painted. Ink stays
-    // where it was relative to the middle of the page, scaled with the shorter
-    // side (as the logo is), so it's never stretched and stays on the logo.
-    resize(w, h, pixelsPerCss) {
+    // Match the sheet's size, keeping any ink already painted. Ink stays where
+    // it was relative to the logo, scaled with it, so it's never stretched and
+    // stays on the logo. anchor: where the logo's centre is across the canvas
+    // (cx, px) and the length it's sized from (base, px); by default the
+    // middle and the shorter side.
+    resize(w, h, pixelsPerCss, anchor = { cx: w / 2, base: Math.min(w, h) }) {
       px = pixelsPerCss
-      if (canvas.width === w && canvas.height === h) return
+      const prev = logoAnchor
+      logoAnchor = anchor
+      if (canvas.width === w && canvas.height === h && prev && Math.abs(prev.cx - anchor.cx) < 0.5) return
       // Fold any strokes in progress into the finished ink first.
       for (const p of pens.values()) {
         if (!p.layer) continue
@@ -821,16 +853,17 @@ export function createInk() {
         p.layer = null
         if (p.current) p.current.layer = null
       }
-      // Old canvas px → new: p * k + (ox, oy).
-      const k = Math.min(w, h) / Math.min(canvas.width, canvas.height)
-      const ox = (w - canvas.width * k) / 2
+      // Old canvas px → new: p * k + (ox, oy), keeping the logo's centre put.
+      const from = prev ?? { cx: canvas.width / 2, base: Math.min(canvas.width, canvas.height) }
+      const k = anchor.base / from.base
+      const ox = anchor.cx - from.cx * k
       const oy = (h - canvas.height * k) / 2
       const copy = (src) => {
         if (src.width <= 1) return null
         const c = document.createElement('canvas')
         c.width = src.width
         c.height = src.height
-        c.getContext('2d').drawImage(src, 0, 0)
+        c.getContext('2d', { willReadFrequently: true }).drawImage(src, 0, 0)
         return c
       }
       const inkCopy = copy(canvas)
@@ -910,9 +943,30 @@ export function createInk() {
       dirtyTiles.clear()
     },
 
+    // Wipes all ink off the sheet, strokes in progress included.
+    clear() {
+      for (const [id, p] of pens) {
+        if (p.stroke.active) {
+          select(id)
+          p.stroke.active = false
+        }
+        p.current = null
+        p.layer = null
+      }
+      current = null
+      ctx = baseCtx
+      for (const c of [baseCtx, dirCtx, ageCtx]) c.clearRect(0, 0, canvas.width, canvas.height)
+      records.length = 0
+      wet.length = 0
+      clearQueue.clear()
+      dirtyTiles.clear()
+      recomputeBounds()
+      for (const t of [texture, dirTexture, ageTexture]) t.needsUpdate = true
+    },
+
     // Scene time in seconds; call once per frame before drawing.
     setTime(t) {
-      now = t
+      now = t + HEADROOM
       if (ageStepAt(t) > 250) rebase(ageStepAt(t) - 125)
       uniforms.inkNowStep.value = t / AGE_STEP - ageBase
     },
@@ -923,7 +977,9 @@ export function createInk() {
     },
 
     // Methods that draw take a pen id (default 'user'), so pens don't interfere.
-    begin(x, y, t, id = 'user') {
+    // begin's options: age, in seconds, for a stroke that was drawn earlier
+    // (so it fades when it would have).
+    begin(x, y, t, id = 'user', { age = 0 } = {}) {
       select(id)
       const streaks = Array.from({ length: 2 + Math.floor(Math.random() * 2) }, () => [
         Math.random() * 1.6 - 0.8,
@@ -946,10 +1002,11 @@ export function createInk() {
         pts: [{ x, y, w: NIB_WIDTH_SLOW * 0.9 }],
         tailDrawn: true,
       })
-      current = penState.current = { x0: x, y0: y, x1: x, y1: y, groups: [], tiles: new Set(), layer: ctx, born: ageStepAt(now) }
+      current = penState.current = { x0: x, y0: y, x1: x, y1: y, groups: [], tiles: new Set(), layer: ctx, born: Math.max(0, ageStepAt(now - Math.min(age, HEADROOM))) }
       // The nib touching down leaves a small blot.
       blot(x, y, nib() * BLOT_TOUCH * (0.8 + Math.random() * 0.4), 0.2)
-      stamp(x, y, x + 0.01, y + 0.01, stroke.width)
+      const half = stamp(x, y, x + 0.01, y + 0.01, stroke.width)
+      recordTrail([{ x, y }, { x: x + 0.01, y: y + 0.01 }], half, 0, 0)
     },
 
     // Pointer moved to (x, y) at time t (ms). The stroke is a smooth curve

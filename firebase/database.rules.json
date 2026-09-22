@@ -1,0 +1,29 @@
+{
+  "rules": {
+    // Live drawing (see src/liveSketch.js). Anyone may draw: each stroke is
+    // created once with the server's time, can be added to for 10 minutes,
+    // and can only be deleted once it's older than that (by any visitor,
+    // which keeps the database tidy).
+    "strokes": {
+      ".read": true,
+      ".indexOn": ["t"],
+      "$id": {
+        ".write": "(!data.exists() && newData.exists()) || (data.exists() && newData.exists() && data.child('t').val() > now - 600000) || (data.exists() && !newData.exists() && data.child('t').val() < now - 600000)",
+        ".validate": "newData.hasChildren(['t', 'u'])",
+        "t": { ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() : newData.val() === now)" },
+        "u": { ".validate": "newData.isString() && newData.val().length <= 32 && (!data.exists() || newData.val() === data.val())" },
+        // Batches of points: "x,y,ms;x,y,ms;…".
+        "p": {
+          "$batch": { ".validate": "newData.isString() && newData.val().length <= 4000" }
+        },
+        "e": { ".validate": "newData.isBoolean()" },
+        "$other": { ".validate": false }
+      }
+    },
+    // When the sheet was last cleared for everyone (server time). Only the
+    // project's owners can set it (the dev server does, with the Firebase
+    // CLI); every page wipes its sheet when it changes.
+    "clearedAt": { ".read": true, ".write": false },
+    "$other": { ".read": false, ".write": false }
+  }
+}

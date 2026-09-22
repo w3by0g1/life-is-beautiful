@@ -3,6 +3,7 @@ import babel from '@rolldown/plugin-babel'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import { defineConfig } from 'vite'
 import fs from 'node:fs'
+import { execFile } from 'node:child_process'
 import path from 'node:path'
 
 // While developing, lets the page add a recorded drawing to the intro bank in
@@ -70,6 +71,38 @@ function introPathSaver() {
   }
 }
 
+// While developing, clears the shared live drawing for everyone (POST
+// /__clear-sketches): deletes every stroke and stamps clearedAt, which every
+// open page watches. Uses the Firebase CLI's login, which the public rules
+// don't allow anyone else.
+function sketchClearer() {
+  return {
+    name: 'sketch-clearer',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__clear-sketches', (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          res.end()
+          return
+        }
+        const data = JSON.stringify({ strokes: null, clearedAt: { '.sv': 'timestamp' } })
+        execFile(
+          'firebase',
+          ['database:update', '/', '--data', data, '--force', '--project', 'life-is-beautiful-sketches'],
+          { timeout: 60000 },
+          (err, stdout, stderr) => {
+            if (err) {
+              res.statusCode = 500
+              res.end(String(stderr || err.message))
+            } else res.end('ok')
+          },
+        )
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 // `npm run dev:phone` serves over https on the local network (with a
 // self-signed certificate), which phones need before they'll share their tilt.
@@ -81,6 +114,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     introPathSaver(),
+    sketchClearer(),
     mode === 'phone' && basicSsl(),
   ],
   server: mode === 'phone' ? { host: true } : undefined,

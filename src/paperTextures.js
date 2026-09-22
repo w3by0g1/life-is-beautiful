@@ -98,8 +98,8 @@ function boxBlurV(src, dst, w, h, r, sums) {
 // Turn the dark-ink-on-white artwork into a smooth height field where only the
 // ink is raised, each stroke as a soft rounded ridge.
 function buildLogoHeight(img, w, h, S) {
-  const size = Math.min(w, h) * S.logoFraction
-  const x = (w - size) / 2
+  const size = S.logoBase * S.logoFraction
+  const x = S.logoX - size / 2
   const y = (h - size) / 2
   // Blur radii were tuned for a ~635px logo; keep the profile consistent at any size.
   const k = size / 635
@@ -334,8 +334,8 @@ function addCreases(surface, w, h, px, S) {
   // Where the folds cross: always within the middle 80% of the sheet, placed
   // from its centre in units of the shorter side (as the logo is), so it keeps
   // its spot relative to the logo when the window is resized.
-  const m = Math.min(w, h)
-  const ix = w / 2 + (random() - 0.5) * 0.8 * m
+  const m = S.logoBase
+  const ix = S.logoX + (random() - 0.5) * 0.8 * m
   const iy = h / 2 + (random() - 0.5) * 0.8 * m
   for (let n = 0; n < S.creases; n++) {
     const ang = baseAng + (n % 2) * (Math.PI / 2)
@@ -450,7 +450,7 @@ function addVellumSpeckle(ctx, w, h, px, speckle) {
   const cw = Math.ceil(w / cell) + 1
   const ch = Math.ceil(h / cell) + 1
   const cloud = makeCanvas(cw, ch)
-  const cctx = cloud.getContext('2d')
+  const cctx = cloud.getContext('2d', { willReadFrequently: true })
   const cimg = cctx.createImageData(cw, ch)
   for (let i = 0; i < cw * ch; i++) {
     cimg.data[i * 4] = 120
@@ -507,7 +507,12 @@ function addVellumSpeckle(ctx, w, h, px, speckle) {
 
 // img: the logo (ImageBitmap, image or canvas). w, h: texture size. px: texture
 // pixels per CSS pixel. S: settings from paperScene.js.
-export function generatePaperTextures(img, w, h, px, S) {
+// S.logoX: where the logo's centre goes across the sheet (texels), and
+// S.logoBase: the length (texels) the logo is sized from (the screen's shorter
+// side). The sheet can be wider than the screen (extra paper to the left, for
+// panning), so these default to the middle and the shorter side.
+export function generatePaperTextures(img, w, h, px, settings) {
+  const S = { logoX: w / 2, logoBase: Math.min(w, h), ...settings }
   const stream = (k) => {
     if (S.seed === undefined) random = Math.random
     else seedRandom(S.seed + k * 0x9e3779b9)
@@ -562,7 +567,7 @@ export function generatePaperTextures(img, w, h, px, S) {
   writeNormalXY(logo.height, (S.logoStrength * logo.k) / LOGO_REF_K ** 2, w, h, logoOut)
   writeChannel(logo.height, w, h, logoOut, 2)
   // Shadow length is a fraction of the sheet's shorter side, as the logo is.
-  const reach = (S.shadowLength * Math.min(w, h)) / 2
+  const reach = (S.shadowLength * S.logoBase) / 2
   const shadowMask = gaussianBlur(logo.height, w, h, Math.max(1, reach * 0.6))
   writeChannel(shadowMask, w, h, logoOut, 3, (v) => Math.min(1, v * 60))
 

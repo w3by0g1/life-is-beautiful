@@ -198,12 +198,15 @@ export function createHaze(renderer, { blur, amount, tint }) {
 
     // The average colour (display RGB, 0–255) along the top and bottom edges of
     // the last frame, from the small blurred copy (so it's cheap to read back),
-    // with the haze's own wash applied as the composite does.
-    edgeColors() {
+    // with the haze's own wash applied as the composite does. Resolves once
+    // the GPU has the pixels ready, without stalling it.
+    async edgeColors() {
       const w = blurA.width
-      const row = new Uint8Array(w * 4)
-      const read = (y) => {
-        renderer.readRenderTargetPixels(blurA, 0, y, w, 1, row)
+      const rows = [blurA.height - 1, 0].map((y) =>
+        renderer.readRenderTargetPixelsAsync(blurA, 0, y, w, 1, new Uint8Array(w * 4)),
+      )
+      const [topRow, bottomRow] = await Promise.all(rows)
+      const average = (row) => {
         const c = [0, 0, 0]
         for (let x = 0; x < w; x++) for (let k = 0; k < 3; k++) c[k] += row[x * 4 + k]
         return c.map((v) => {
@@ -212,7 +215,7 @@ export function createHaze(renderer, { blur, amount, tint }) {
         })
       }
       // Render targets run bottom-up.
-      return { top: read(blurA.height - 1), bottom: read(0) }
+      return { top: average(topRow), bottom: average(bottomRow) }
     },
 
     dispose() {

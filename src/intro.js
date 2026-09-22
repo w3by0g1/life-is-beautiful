@@ -6,7 +6,7 @@ import introBank from './assets/intro-path.json'
 // the logo but doesn't move the light, and it runs alongside the user, who can
 // draw at the same time.
 //
-// While developing, a Record / Stop button sits in the top-left corner. After
+// While developing, a Record / Stop button sits in the bottom-right corner. After
 // Record, the next press starts the recording, which logs every pointer
 // movement (presses, drags, releases and the hovering between strokes) until
 // Stop. The dev server then adds it to the bank in src/assets/intro-path.json
@@ -39,7 +39,10 @@ function recordingsIn(saved) {
 // element: the canvas (for positions); container: where the Record button
 // goes; down/move/up: the ghost pen's handlers, taking events with clientX,
 // clientY and timeStamp.
-export function createIntro({ element, container, down, move, up }) {
+// offset: how far (CSS px) the sheet is currently panned to the right, so
+// recordings are made and replayed relative to the sheet, not the screen.
+// clearPaper: wipes all drawings (returns a promise), for the dev panel.
+export function createIntro({ element, container, down, move, up, offset = () => 0, clearPaper }) {
   const bank = recordingsIn(introBank)
   // When each was recorded (for the list), where known.
   const recordedAt = introBank?.recordings?.map((r) => r.recordedAt) ?? []
@@ -53,6 +56,7 @@ export function createIntro({ element, container, down, move, up }) {
   // Record / Stop button (only while developing: saving needs the dev server).
   let button = null
   let listButton = null
+  let clearButton = null
   let panel = null
   const setButton = (recording) => {
     button.textContent = recording ? '■ Stop' : `● Record intro${bank.length ? ` (${bank.length} saved)` : ''}`
@@ -67,8 +71,8 @@ export function createIntro({ element, container, down, move, up }) {
     Object.assign(button.style, {
       position: 'fixed',
       // Clear of a phone's status bar and rounded corners.
-      top: 'calc(12px + env(safe-area-inset-top, 0px))',
-      left: 'calc(12px + env(safe-area-inset-left, 0px))',
+      bottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+      right: 'calc(12px + env(safe-area-inset-right, 0px))',
       zIndex: 1,
       font: '12px/1 system-ui, sans-serif',
       padding: '7px 11px',
@@ -89,7 +93,7 @@ export function createIntro({ element, container, down, move, up }) {
     listButton = document.createElement('button')
     Object.assign(listButton.style, {
       position: 'fixed',
-      top: 'calc(12px + env(safe-area-inset-top, 0px))',
+      bottom: 'calc(48px + env(safe-area-inset-bottom, 0px))',
       right: 'calc(12px + env(safe-area-inset-right, 0px))',
       zIndex: 1,
       font: '12px/1 system-ui, sans-serif',
@@ -104,6 +108,30 @@ export function createIntro({ element, container, down, move, up }) {
     listButton.title = 'View, play or delete the saved intro recordings'
     listButton.addEventListener('click', () => (panel ? closePanel() : openPanel()))
     container.appendChild(listButton)
+
+    if (clearPaper) {
+      clearButton = document.createElement('button')
+      clearButton.style.cssText = listButton.style.cssText
+      clearButton.style.bottom = 'calc(84px + env(safe-area-inset-bottom, 0px))'
+      clearButton.textContent = '✕ Clear paper'
+      clearButton.title = 'Wipe all drawings off the sheet, for everyone viewing the site'
+      clearButton.addEventListener('click', () => {
+        if (!confirm('Clear all drawings from the paper, for everyone viewing the site?')) return
+        clearButton.disabled = true
+        clearButton.textContent = 'Clearing…'
+        clearPaper()
+          .then(() => (clearButton.textContent = '✓ Cleared'))
+          .catch((err) => {
+            clearButton.textContent = '✕ Clear paper'
+            alert(`Cleared here, but not for everyone: ${err.message}`)
+          })
+          .finally(() => {
+            clearButton.disabled = false
+            setTimeout(() => (clearButton.textContent = '✕ Clear paper'), 1500)
+          })
+      })
+      container.appendChild(clearButton)
+    }
   }
 
   // The list of saved recordings.
@@ -140,7 +168,7 @@ export function createIntro({ element, container, down, move, up }) {
     panel = document.createElement('div')
     Object.assign(panel.style, {
       position: 'fixed',
-      top: 'calc(48px + env(safe-area-inset-top, 0px))',
+      bottom: 'calc(120px + env(safe-area-inset-bottom, 0px))',
       right: 'calc(12px + env(safe-area-inset-right, 0px))',
       zIndex: 2,
       width: 'min(320px, calc(100vw - 24px))',
@@ -220,12 +248,12 @@ export function createIntro({ element, container, down, move, up }) {
   const toPath = (clientX, clientY) => {
     const r = element.getBoundingClientRect()
     const m = Math.min(r.width, r.height)
-    return [(clientX - r.left - r.width / 2) / m, (clientY - r.top - r.height / 2) / m]
+    return [(clientX - r.left - r.width / 2 - offset()) / m, (clientY - r.top - r.height / 2) / m]
   }
   const fromPath = (x, y) => {
     const r = element.getBoundingClientRect()
     const m = Math.min(r.width, r.height)
-    return [r.left + r.width / 2 + x * m, r.top + r.height / 2 + y * m]
+    return [r.left + r.width / 2 + offset() + x * m, r.top + r.height / 2 + y * m]
   }
 
   const log = (type, e) => {
@@ -286,7 +314,11 @@ export function createIntro({ element, container, down, move, up }) {
         if (rec) {
           if (kind === 'down') log(DOWN, e)
           else if (kind === 'up') log(UP, e)
-          else if (kind === 'move') for (const ev of e.getCoalescedEvents?.() ?? [e]) log(MOVE, ev)
+          else if (kind === 'move') {
+            // Every sample since the last event (some events report none).
+            const samples = e.getCoalescedEvents?.()
+            for (const ev of samples?.length ? samples : [e]) log(MOVE, ev)
+          }
         }
         fn(e)
       }
@@ -330,6 +362,7 @@ export function createIntro({ element, container, down, move, up }) {
     dispose() {
       button?.remove()
       listButton?.remove()
+      clearButton?.remove()
       closePanel()
     },
   }

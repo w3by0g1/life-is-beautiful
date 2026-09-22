@@ -1,3 +1,41 @@
+/* Arrows (← ↑ → ↓ and the diagonals) are always set in Rigid Square: this
+   face covers only those characters, and comes first in every font stack
+   below, so any arrow uses it and everything else falls through to the
+   stack's own font. (An arrows-only cut of RigidSquare-Regular.otf.) */
+@font-face {
+  font-family: 'Rigid Square Arrows';
+  src: url('./assets/fonts/RigidSquare-Arrows.woff2') format('woff2');
+  unicode-range: U+2190-2199;
+  font-display: block;
+}
+
+/* Neue Haas Grotesk Display 55 Roman: the artist's name and the names of
+   their albums and singles on an artist's page. (A Latin cut of
+   NHaasGroteskDSPro-55Rg.otf.) */
+@font-face {
+  font-family: 'Neue Haas Grotesk Display';
+  src: url('./assets/fonts/NHaasGroteskDSPro-55Rg.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Its Medium weight, for the tracklist numbers (digits only; a cut of
+   NHaasGroteskDSPro-65Md.otf). */
+@font-face {
+  font-family: 'Neue Haas Grotesk Display';
+  src: url('./assets/fonts/NHaasGroteskDSPro-65Md-digits.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+
+html,
+body {
+  font-family: 'Rigid Square Arrows', system-ui, sans-serif;
+}
+
 /* The page is the paper's gradient, so anything around the canvas (behind a
    phone's status bar and browser bars, or before the paper appears) matches
    it. paperScene.js keeps it in step with PAPER_FROM / PAPER_TO and the
@@ -33,6 +71,788 @@ body {
   height: calc(100lvh + var(--overhang, 0px));
 }
 
+/* Header over the top of the sheet: logo and links only (the paper shows
+   through, and everywhere else stays drawable). */
+.site-header {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 57px;
+  display: flex;
+  align-items: center;
+  gap: clamp(20px, 2.6vw, 37px);
+  padding: 0 clamp(16px, 2.2vw, 32px);
+  padding-left: calc(clamp(16px, 2.2vw, 32px) + env(safe-area-inset-left, 0px));
+  pointer-events: none;
+  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-size: 14px;
+  color: #111;
+}
+
+.site-header a {
+  pointer-events: auto;
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-header nav {
+  display: flex;
+  gap: clamp(18px, 2.6vw, 37px);
+  /* A soft white glow all around the letters. */
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+}
+
+.site-header nav a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.site-header nav a.active {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+/* The artist list beside the logo (#artists). Right-aligned, level with the
+   logo's middle; placed by App.jsx. Set in EB Garamond and multiplied onto
+   the sheet, so the paper's grain and light show through as if printed.
+   The names blur into focus as they fade in, once the pan has mostly
+   settled, each a moment after the one above; they fade out together.
+   Hovering a name smoothly
+   bolds it. Only the names themselves take the pointer (and only while
+   shown), so drawing still works around them. */
+.artists {
+  position: fixed;
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transform: translateY(-50%);
+  text-align: right;
+  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-size: 20px;
+  line-height: 26px;
+  color: #1a1a1a;
+  mix-blend-mode: multiply;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.artists li {
+  width: fit-content;
+  margin-left: auto;
+  opacity: 0;
+  filter: blur(6px);
+  transition:
+    opacity 0.35s ease,
+    filter 0.35s ease,
+    font-weight 0.3s ease;
+}
+
+.artists.open li {
+  opacity: 1;
+  filter: blur(0);
+  pointer-events: auto;
+  cursor: default;
+  transition:
+    opacity 0.7s ease calc(0.75s + var(--i) * 0.03s),
+    filter 0.9s ease calc(0.75s + var(--i) * 0.03s),
+    font-weight 0.3s ease;
+}
+
+.artists.open li:hover {
+  font-weight: 600;
+}
+
+.artists a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The info text (#info), to the right of the logo, level with its middle;
+   placed by App.jsx. Neue Haas Grotesk, multiplied onto the sheet like the
+   artist list, and blurring into focus the same way once the pan settles. */
+.info-text {
+  position: fixed;
+  z-index: 1;
+  transform: translateY(-50%);
+  font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 21px;
+  line-height: 1.75;
+  letter-spacing: -0.01em;
+  color: #2a2a2a;
+  mix-blend-mode: multiply;
+  opacity: 0;
+  filter: blur(6px);
+  pointer-events: none;
+  transition:
+    opacity 0.35s ease,
+    filter 0.35s ease;
+}
+
+.info-text.open {
+  opacity: 1;
+  filter: blur(0);
+  pointer-events: auto;
+  transition:
+    opacity 0.7s ease 0.75s,
+    filter 0.9s ease 0.75s;
+}
+
+.info-text p {
+  margin: 0 0 1em;
+}
+
+.info-text p:last-child {
+  margin-bottom: 0;
+}
+
+.info-text a {
+  color: inherit;
+}
+
+@media (max-width: 600px) {
+  .info-text {
+    font-size: 17px;
+  }
+}
+
+/* An artist's page (#artists/<slug>), over the sheet: the scene behind is
+   blurred and lightened, and the artist's profile sits on the left with
+   their albums, singles and media on the right (see ArtistPage.jsx). */
+.artist-page {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  /* How much the sheet behind is lightened (the wash's opacity and a touch of
+     brightness) and blurred. */
+  background: rgba(248, 250, 251, 0.38);
+  -webkit-backdrop-filter: blur(16px) brightness(1.0);
+  backdrop-filter: blur(16px) brightness(1.0);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.45s ease,
+    visibility 0s linear 0.45s;
+  color: #777;
+  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+}
+
+.artist-page.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.45s ease;
+}
+
+/* The page's content scrolls inside the blurred background, fading to
+   transparent at the top (under the header) and bottom edges. */
+.ap-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  --fade-top: 96px;
+  --fade-bottom: 72px;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+}
+
+.ap-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 521fr) minmax(0, 682fr);
+  gap: 37px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 124px 100px 96px;
+  padding-top: calc(124px + env(safe-area-inset-top, 0px));
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.5s ease,
+    transform 0.6s ease;
+}
+
+.artist-page.loaded .ap-inner {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.6s ease 0.1s,
+    transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s;
+}
+
+.ap-missing {
+  position: absolute;
+  top: 50%;
+  width: 100%;
+  text-align: center;
+}
+
+/* Left: portrait, name, description, links. Stays put while the right
+   column scrolls. */
+.ap-profile {
+  position: sticky;
+  top: 124px;
+  align-self: start;
+}
+
+.ap-portrait {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.ap-back {
+  display: inline-block;
+  margin-top: 22px;
+  font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 23px;
+  letter-spacing: 0;
+  color: #222;
+  text-decoration: none;
+}
+
+.ap-back span {
+  display: inline-block;
+  transition: transform 0.25s ease;
+}
+
+.ap-back:hover span {
+  transform: translateX(-3px);
+}
+
+.ap-rich p {
+  margin: 0 0 20px;
+}
+
+.ap-rich p:last-child {
+  margin-bottom: 0;
+}
+
+.ap-rich strong {
+  font-weight: 600;
+  color: #5c5c5c;
+}
+
+.ap-rich a {
+  color: inherit;
+}
+
+.ap-bio {
+  margin-top: 8px;
+  font-size: 19px;
+  line-height: 26px;
+}
+
+.ap-links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.ap-links a {
+  display: block;
+  color: #777;
+  transition: color 0.2s ease;
+}
+
+.ap-links a:hover {
+  color: #222;
+}
+
+.ap-links svg {
+  display: block;
+}
+
+/* Right: albums, singles and media, in order. */
+.ap-content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.ap-release {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+
+.ap-album {
+  grid-template-columns: 233px minmax(0, 1fr);
+}
+
+.ap-single {
+  grid-template-columns: 166px minmax(0, 1fr);
+}
+
+.ap-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.ap-release-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ap-release-head h3 {
+  margin: 0;
+  font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: #222;
+}
+
+.ap-listen {
+  flex: none;
+  margin-top: 4px;
+  padding: 1px 5px 2px;
+  background: #1a1a1a;
+  color: #fff;
+  font-family: 'Rigid Square Arrows', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.ap-listen:hover {
+  background: #555;
+}
+
+.ap-meta {
+  margin: 6px 0 8px;
+  font-family: 'Rigid Square Arrows', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  color: #888;
+}
+
+.ap-release-text .ap-rich {
+  font-size: 17px;
+  line-height: 20px;
+}
+
+.ap-tracks {
+  margin: 28px 0 0;
+  /* Numbers start at the text column's edge, in line with the description. */
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+  line-height: 24px;
+}
+
+/* Wrapped lines hang under the title, not the number. */
+.ap-tracks li {
+  padding-left: 24px;
+  text-indent: -24px;
+}
+
+.ap-tracks strong {
+  font-weight: 600;
+  color: #666;
+}
+
+.ap-track-no {
+  display: inline-block;
+  width: 24px;
+  /* Its own box would otherwise inherit the line's hanging indent. */
+  text-indent: 0;
+}
+
+/* The track number in Neue Haas Grotesk Medium, white on a grey dot (it
+   stretches into a pill for two digits). */
+.ap-track-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #777;
+  color: #fff;
+  font-family: 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 9.5px;
+  line-height: 1;
+  vertical-align: 2px;
+}
+
+.ap-media img,
+.ap-media video {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.ap-media-double {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* A lone image or video: half the column wide, placed at one of five
+   positions across it. */
+.ap-media-single > * {
+  width: calc(50% - 8px);
+}
+
+.ap-align-left > * {
+  margin-left: 0;
+}
+
+.ap-align-leftCenter > * {
+  margin-left: 12.5%;
+}
+
+.ap-align-center > * {
+  margin-left: 25%;
+}
+
+.ap-align-rightCenter > * {
+  margin-left: 37.5%;
+}
+
+.ap-align-right > * {
+  margin-left: calc(50% + 8px);
+}
+
+/* The happenings calendar (#happenings; see HappeningsPage.jsx): the month's
+   days on the left, the chosen event's details on the right. Shares the
+   artist page's blurred background and masked scrolling. */
+.hp-inner {
+  grid-template-columns: minmax(0, 893fr) minmax(0, 401fr);
+  gap: 51px;
+  max-width: 1440px;
+  padding: 96px 48px 80px;
+  padding-top: calc(96px + env(safe-area-inset-top, 0px));
+}
+
+.hp-month {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.hp-month h2 {
+  margin: 0;
+  min-width: 7.2em;
+  text-align: center;
+  font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 30px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: #222;
+}
+
+.hp-month button {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font-family: 'Rigid Square Arrows', sans-serif;
+  font-size: 30px;
+  line-height: 1;
+  color: #222;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.hp-month button:first-child:hover {
+  transform: translateX(-3px);
+}
+
+.hp-month button:last-child:hover {
+  transform: translateX(3px);
+}
+
+.hp-grid {
+  --gap: 12px;
+  /* Everything on screen that isn't calendar cells: the space above (header
+     and month title), the day names, and a margin below. */
+  --around: 256px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--gap);
+  margin-top: 18px;
+  /* As wide as the column allows, but narrow enough that six weeks of A4
+     days fit in the window's height, so the days are the same size in every
+     month (a month spans five or six weeks). */
+  width: min(100%, calc((100vh - var(--around) - 5 * var(--gap)) / 6 * 210 / 297 * 7 + 6 * var(--gap)));
+  width: min(100%, calc((100svh - var(--around) - 5 * var(--gap)) / 6 * 210 / 297 * 7 + 6 * var(--gap)));
+}
+
+.hp-dayname {
+  margin-bottom: -8px;
+  font-size: 14px;
+  color: #777;
+}
+
+.hp-short {
+  display: none;
+}
+
+/* A day: an A4-shaped outline (like a poster); past days are shaded grey. */
+.hp-day {
+  position: relative;
+  aspect-ratio: 210 / 297;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.hp-day.past {
+  border-color: rgba(0, 0, 0, 0.22);
+  background: linear-gradient(#bdbdbd, #efefef);
+}
+
+.hp-daynum {
+  position: absolute;
+  top: 10px;
+  left: 11px;
+  font-size: 18px;
+  color: #999;
+}
+
+.hp-day.past .hp-daynum {
+  color: #fff;
+}
+
+.hp-day.has-event {
+  border-color: transparent;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.hp-day.has-event:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.hp-day.chosen {
+  box-shadow: 0 0 0 1px #222;
+}
+
+.hp-day img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hp-more {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 1px 4px;
+  background: #1a1a1a;
+  color: #fff;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* The chosen event. */
+.hp-side {
+  position: sticky;
+  top: 96px;
+  align-self: start;
+}
+
+.hp-poster {
+  display: block;
+  /* Full width, unless that would push the event's details off the bottom
+     of the window. */
+  width: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 400px);
+  max-height: calc(100svh - 400px);
+  min-height: 200px;
+  object-fit: contain;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.hp-details h2 {
+  margin: 18px 0 6px;
+  font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 25px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: #333;
+}
+
+.hp-details .ap-meta {
+  margin: 0 0 8px;
+}
+
+.hp-lineup {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: 15px;
+  line-height: 18px;
+  color: #555;
+}
+
+.hp-lineup a {
+  color: inherit;
+  text-underline-offset: 2px;
+}
+
+.hp-description {
+  margin-top: 16px;
+  font-size: 15px;
+  line-height: 20px;
+  color: #888;
+}
+
+.hp-tickets {
+  display: inline-block;
+  margin-top: 14px;
+}
+
+.hp-empty {
+  margin: 0;
+  font-size: 17px;
+}
+
+/* Narrow screens: one column, profile first. */
+@media (max-width: 900px) {
+  .ap-scroll {
+    --fade-top: 80px;
+    --fade-bottom: 48px;
+  }
+
+  .ap-inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    padding: 88px 16px 64px;
+    padding-top: calc(88px + env(safe-area-inset-top, 0px));
+  }
+
+  .ap-profile {
+    position: static;
+  }
+
+
+  .ap-album,
+  .ap-single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ap-art {
+    width: 100%;
+  }
+
+  .ap-media-single > * {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  /* The calendar above the chosen event, with short day names. */
+  .hp-inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+    padding: 88px 12px 64px;
+    padding-top: calc(88px + env(safe-area-inset-top, 0px));
+  }
+
+  .hp-month {
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .hp-month h2 {
+    min-width: 0;
+    font-size: 24px;
+  }
+
+  .hp-grid {
+    --gap: 5px;
+    --around: 200px;
+  }
+
+  .hp-dayname {
+    margin-bottom: -2px;
+    font-size: 12px;
+  }
+
+  .hp-long {
+    display: none;
+  }
+
+  .hp-short {
+    display: inline;
+  }
+
+  .hp-daynum {
+    top: 4px;
+    left: 5px;
+    font-size: 13px;
+  }
+
+  .hp-side {
+    position: static;
+  }
+
+  .hp-poster {
+    width: 100%;
+    max-height: none;
+  }
+}
+
+.site-logo {
+  display: block;
+  flex: none;
+}
+
+.site-logo img {
+  display: block;
+  width: 56px;
+  height: 56px;
+  /* The same soft white glow as the links, following the logo's lines
+     (drop-shadow traces the transparent image, not its box). */
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9));
+}
+
 .hint {
   position: fixed;
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
@@ -40,7 +860,7 @@ body {
   right: 0;
   margin: 0;
   text-align: center;
-  font: 13px/1.4 system-ui, sans-serif;
+  font: 13px/1.4 'Rigid Square Arrows', system-ui, sans-serif;
   color: rgba(60, 55, 45, 0.45);
   pointer-events: none;
 }

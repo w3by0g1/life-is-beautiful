@@ -5,10 +5,16 @@ import { createInk } from './ink.js'
 import { createHaze } from './haze.js'
 import { createIntro } from './intro.js'
 import { createTilt } from './tilt.js'
+import { createLiveSketch } from './liveSketch.js'
+import { LOGO_FRACTION } from './layout.js'
 import { generatePaperTextures } from './paperTextures.js'
 
 // Logo diameter as a fraction of the shorter screen side.
-const LOGO_FRACTION = 0.85
+// Panning the view (see setPan): seconds a pan takes, eased in and out.
+const PAN_TIME = 1.3
+// Seconds the ink takes to fade out or back in when drawing is switched off
+// or on (see setDrawing).
+const INK_TOGGLE_TIME = 0.6
 // Upper bound on the long side of the generated textures, in pixels.
 const MAX_TEX = 2048
 // The ink is drawn at up to this size on its long side, so strokes stay crisp at
@@ -81,6 +87,9 @@ const INK_GROOVE = 0.35
 // leaves; false: the side it comes from).
 const INK_BASE_REACH = 5
 const INK_BASE_GAP = 1
+// How much ink lands on top of the raised logo lines (0 = none: the nib rides
+// over them without marking them; 1 = as on the paper).
+const INK_ON_LOGO = 1
 const INK_GAP_AFTER = true
 // Cast shadows from the raised logo: how far a full-height ridge's shadow
 // reaches across the paper (the screen's shorter side is 2, so it stays the
@@ -221,16 +230,18 @@ function createTextureBuilder(logoImg, onReady) {
   })()
 
   return {
-    async request(w, h, px) {
+    // layout: extra settings for this sheet (where the logo goes, etc.).
+    async request(w, h, px, layout = {}) {
       await ready
       const id = (latest = ++nextId)
+      const settings = { ...textureSettings(), ...layout }
       if (worker) {
-        worker.postMessage({ type: 'generate', id, w, h, px, settings: textureSettings() })
+        worker.postMessage({ type: 'generate', id, w, h, px, settings })
       } else {
         // Let the page paint first, then build here.
         setTimeout(() => {
           if (id !== latest) return
-          onReady({ id, w, h, ...generatePaperTextures(logoImg, w, h, px, textureSettings()) })
+          onReady({ id, w, h, ...generatePaperTextures(logoImg, w, h, px, settings) })
         }, 0)
       }
     },
@@ -259,7 +270,10 @@ function makeDataTexture(data, w, h, srgb, mirror = true) {
   return texture
 }
 
-export async function createPaperScene(container, logoUrl) {
+// options.panExtent: how far (CSS px) the view may be panned, { left, right }
+// (see setPan): the sheet is built with that much extra paper on its left (for
+// panning right) and right (for panning left).
+export async function createPaperScene(container, logoUrl, options = {}) {
   // No antialiasing, depth or alpha buffers: the scene is one flat sheet with
   // soft-edged dust, so they'd only cost memory (a lot of it on Retina screens).
   const renderer = new THREE.WebGLRenderer({
@@ -329,6 +343,7 @@ export async function createPaperScene(container, logoUrl) {
     inkSkip: { value: INK_SKIP },
     inkBaseReach: { value: 1 },
     inkBaseGap: { value: INK_BASE_GAP },
+    inkOnLogo: { value: INK_ON_LOGO },
     inkGapSide: { value: INK_GAP_AFTER ? 1 : -1 },
     inkDebug: { value: 0 },
     inkGroove: { value: INK_GROOVE },
@@ -354,6 +369,9 @@ export async function createPaperScene(container, logoUrl) {
     // offset zw). Identity except just after a resize, while those are still
     // laid out for the old window size (see `fit`).
     paperRemap: { value: new THREE.Vector4(1, 1, 0, 0) },
+    // How far the view is panned, as a fraction of the screen width (the
+    // sheet, and everything on it, moves right by this much).
+    panU: { value: 0 },
     inkRemap: { value: new THREE.Vector4(1, 1, 0, 0) },
   }
   paperMat.onBeforeCompile = (shader) => {
@@ -379,6 +397,7 @@ export async function createPaperScene(container, logoUrl) {
         }
         uniform float paperAspect;
         uniform vec4 paperRemap;
+        uniform float panU;
         uniform vec4 inkRemap;
         uniform sampler2D paintMap;
         uniform vec4 inkBounds;
@@ -406,6 +425,7 @@ export async function createPaperScene(container, logoUrl) {
         uniform sampler2D inkDirMap;
         uniform float inkDebug;
         uniform float inkBaseGap;
+        uniform float inkOnLogo;
         uniform float inkGapSide;
         uniform float inkGroove;
         uniform float inkBlotch;
@@ -449,7 +469,9 @@ export async function createPaperScene(container, logoUrl) {
           logoN.z = sqrt( max( 1e-4, 1.0 - dot( logoN.xy, logoN.xy ) ) );
 
           // World position: x right, z down the screen (UV v runs up the screen).
-          vec2 wp = vec2( ( vNormalMapUv.x - 0.5 ) * 2.0 * paperAspect, ( 0.5 - vNormalMapUv.y ) * 2.0 );
+          // Panning moves the sheet (and the light and fog over it) like a
+          // camera move.
+          vec2 wp = vec2( ( vNormalMapUv.x - panU - 0.5 ) * 2.0 * paperAspect, ( 0.5 - vNormalMapUv.y ) * 2.0 );
 
           // Within the pointer's circle the logo's relief is flipped from raised
           // to pressed in, fading back to raised across the soft edge. Deepest
@@ -471,9 +493,13 @@ export async function createPaperScene(container, logoUrl) {
           // been laid (plus the blur's reach); within that, the outer ring is
           // sampled first and the rest skipped if there's no ink nearby.
           vec2 inkMargin = paintTexel * ( inkBleed * 2.0 + 2.0 );
+          // The age map marks every spot within reach of ink (its soft edge
+          // included), so one sample of it rules out the rest of the ink
+          // work almost everywhere inside the bounds.
           if ( inkOpacity > 0.0 &&
                all( greaterThanEqual( inkUv, inkBounds.xy - inkMargin ) ) &&
-               all( lessThanEqual( inkUv, inkBounds.zw + inkMargin ) ) ) {
+               all( lessThanEqual( inkUv, inkBounds.zw + inkMargin ) ) &&
+               texture2D( inkAgeMap, inkUv ).a > 0.003 ) {
           // Every sample is faded by its own stroke's age, so a faded stroke
           // contributes nothing while live ink right next to it still shows.
           vec4 inkC = texture2D( paintMap, inkUv );
@@ -527,6 +553,9 @@ export async function createPaperScene(container, logoUrl) {
             inkCover *= 1.0 - 0.75 * skip;
             inkCover = max( inkCover, smoothstep( 0.04, 0.3, inkA ) * grooveAll );
             inkCol *= 1.0 - inkGroove * grooveAll;
+            // None on top of the raised logo lines (their embossed shape, not
+            // the press, so it holds as the ink goes down).
+            inkCover *= mix( 1.0, inkOnLogo, smoothstep( 0.3, 0.6, logoT.b * emboss ) );
 
             // The foot of raised lines: low here, but a raised line close by
             // that the pen has just hopped over holds the nib up off the paper
@@ -545,7 +574,8 @@ export async function createPaperScene(container, logoUrl) {
               float nearH = 0.0;
               // Points from here toward the raised line(s) nearby.
               vec2 toRidge = vec2( 0.0 );
-              vec2 reachUv = paintTexel * inkBaseReach * paperRemap.xy;
+              // (Ink texels → screen → paper UV.)
+              vec2 reachUv = paintTexel * inkBaseReach / inkRemap.xy * paperRemap.xy;
               for ( int i = 0; i < 8; i++ ) {
                 float ia = float( i ) * 0.7854;
                 vec2 d = vec2( cos( ia ), sin( ia ) );
@@ -634,6 +664,10 @@ export async function createPaperScene(container, logoUrl) {
 
   const dust = createDust(scene, renderer.getPixelRatio())
   const ink = createInk()
+  // Hidden until the logo embosses, and while drawing is off (see the loop):
+  // how far the drawing on/off fade has got (0–1).
+  ink.uniforms.inkOpacity.value = 0
+  let inkToggle = 1
   Object.assign(embossUniforms, ink.uniforms)
   embossUniforms.paintMap.value = ink.texture
   embossUniforms.inkBounds.value = ink.bounds
@@ -644,8 +678,9 @@ export async function createPaperScene(container, logoUrl) {
   // GPU one per frame, then swapped in together, so no single frame stalls.
   let introStart = null
   let pending = null
-  // The window size (CSS px) the latest texture request, the paper textures in
-  // use, and the ink canvas were laid out for.
+  // What the latest texture request, the paper textures in use, and the ink
+  // canvas were laid out for: the window size (CSS px) and how much extra
+  // paper there is to its left and right, [w, h, left, right].
   let requestedSize = null
   let paperSize = null
   let inkSize = null
@@ -704,18 +739,34 @@ export async function createPaperScene(container, logoUrl) {
   // and ink stays where it was drawn on the logo.
   const viewSize = () => [container.clientWidth, container.clientHeight]
 
-  // Screen UV → UV in something laid out for a window of size w × h.
+  // Screen UV → UV in something laid out for a window of size w × h (with
+  // `extra` more paper to its left), with the view panned: the logo's centre
+  // lines up with the screen's (shifted right by the pan), and sizes scale
+  // with the shorter side, like the logo.
   const remap = (out, size) => {
     const [vw, vh] = viewSize()
-    if (!size) return out.set(1, 1, 0, 0)
-    const [w, h] = size
-    const sx = vw / Math.min(vw, vh) / (w / Math.min(w, h))
-    const sy = vh / Math.min(vw, vh) / (h / Math.min(w, h))
-    out.set(sx, sy, 0.5 - 0.5 * sx, 0.5 - 0.5 * sy)
+    const [w, h, left = 0, right = 0] = size ?? [vw, vh]
+    const total = w + left + right
+    const k = Math.min(w, h) / Math.min(vw, vh)
+    const sx = (vw * k) / total
+    const sy = (vh * k) / h
+    out.set(sx, sy, (left + w / 2 - (vw / 2 + pan.px) * k) / total, 0.5 - 0.5 * sy)
   }
   const fitRemaps = () => {
     remap(embossUniforms.paperRemap.value, paperSize)
     remap(embossUniforms.inkRemap.value, inkSize)
+  }
+
+  // The view's pan (see setPan): where it is and where it's easing to (CSS
+  // px), and how far through the move it is (0–1).
+  const pan = { px: 0, from: 0, to: 0, t: 1 }
+  const stepPan = (dt) => {
+    if (pan.t >= 1) return
+    pan.t = Math.min(1, pan.t + dt / PAN_TIME)
+    const e = pan.t < 0.5 ? 4 * pan.t ** 3 : 1 - (-2 * pan.t + 2) ** 3 / 2
+    pan.px = pan.from + (pan.to - pan.from) * e
+    embossUniforms.panU.value = pan.px / container.clientWidth
+    fitRemaps()
   }
 
   const fit = () => {
@@ -736,6 +787,7 @@ export async function createPaperScene(container, logoUrl) {
     // run 2 per screen height).
     embossUniforms.shadowLength.value = SHADOW_LENGTH * Math.min(1, aspect)
     dust.setAspect(aspect)
+    embossUniforms.panU.value = pan.px / vw
     fitRemaps()
     // The page behind the canvas gets the same gradient as the paper (corner
     // to corner, as in paperTextures.js), for any area it doesn't cover.
@@ -743,25 +795,33 @@ export async function createPaperScene(container, logoUrl) {
     document.documentElement.style.backgroundImage = `linear-gradient(${angle}deg, ${PAPER_FROM}, ${PAPER_TO})`
   }
 
+  // How much extra paper (CSS px) to build either side, for panning.
+  const extent = (e) => ({ left: Math.max(0, Math.ceil(e?.left ?? 0)), right: Math.max(0, Math.ceil(e?.right ?? 0)) })
+  let panExtent = extent(options.panExtent)
   const rebuild = () => {
     const [vw, vh] = viewSize()
-    const scale = Math.min(1, MAX_TEX / (Math.max(vw, vh) * renderer.getPixelRatio()))
-    const tw = Math.round(vw * renderer.getPixelRatio() * scale)
+    const { left, right } = panExtent
+    const extra = left + right
+    const scale = Math.min(1, MAX_TEX / (Math.max(vw + extra, vh) * renderer.getPixelRatio()))
+    const tw = Math.round((vw + extra) * renderer.getPixelRatio() * scale)
     const th = Math.round(vh * renderer.getPixelRatio() * scale)
-    const inkScale = Math.min(1, INK_MAX_TEX / (Math.max(vw, vh) * renderer.getPixelRatio()))
-    const iw = Math.round(vw * renderer.getPixelRatio() * inkScale)
+    // The ink covers the extra paper too, so names can be written there.
+    const inkScale = Math.min(1, INK_MAX_TEX / (Math.max(vw + extra, vh) * renderer.getPixelRatio()))
+    const iw = Math.round((vw + extra) * renderer.getPixelRatio() * inkScale)
     const ih = Math.round(vh * renderer.getPixelRatio() * inkScale)
-    ink.resize(iw, ih, iw / vw)
+    const ipx = iw / (vw + extra)
+    ink.resize(iw, ih, ipx, { cx: (left + vw / 2) * ipx, base: Math.min(vw, vh) * ipx })
     // Ink ages must cover the soft edge the shader gives ink (its outer ring).
     ink.setBlurReach(INK_BLEED * 2 + 1)
-    inkSize = [vw, vh]
+    inkSize = [vw, vh, left, right]
     embossUniforms.paintTexel.value.set(1 / iw, 1 / ih)
-    embossUniforms.inkBleed.value = INK_BLEED * (iw / vw)
-    embossUniforms.inkBaseReach.value = INK_BASE_REACH * (iw / vw)
+    embossUniforms.inkBleed.value = INK_BLEED * ipx
+    embossUniforms.inkBaseReach.value = INK_BASE_REACH * ipx
     fitRemaps()
     // The old textures stay in use until the new ones are ready.
-    requestedSize = [vw, vh]
-    textures.request(tw, th, tw / vw)
+    requestedSize = [vw, vh, left, right]
+    const tpx = tw / (vw + extra)
+    textures.request(tw, th, tpx, { logoX: (left + vw / 2) * tpx, logoBase: Math.min(vw, vh) * tpx })
   }
   fit()
   rebuild()
@@ -785,7 +845,8 @@ export async function createPaperScene(container, logoUrl) {
   // and → ink canvas pixels.
   const toWorld = (e) => {
     const r = renderer.domElement.getBoundingClientRect()
-    return [(((e.clientX - r.left) / r.width) * 2 - 1) * embossUniforms.paperAspect.value, ((e.clientY - r.top) / r.height) * 2 - 1]
+    const u = (e.clientX - r.left) / r.width - embossUniforms.panU.value
+    return [(u * 2 - 1) * embossUniforms.paperAspect.value, ((e.clientY - r.top) / r.height) * 2 - 1]
   }
   // (Through the same remap as the shader, so it lines up mid-resize too.)
   const toInk = (e) => {
@@ -865,17 +926,48 @@ export async function createPaperScene(container, logoUrl) {
   // "ghost" pen that draws and presses but leaves the light alone; see intro.js.
   const intro = createIntro({
     element: renderer.domElement,
+    // Replays follow the sheet when the view is panned.
+    offset: () => pan.px,
+    // The dev panel's Clear paper button: wipes this sheet at once, and the
+    // shared drawing for everyone (through the dev server).
+    clearPaper: () => {
+      ink.clear()
+      return fetch('/__clear-sketches', { method: 'POST' }).then((r) => {
+        if (!r.ok) return r.text().then((t) => Promise.reject(new Error(t)))
+      })
+    },
     container,
     down: (e) => penDown('ghost', e),
     move: (e) => penMove('ghost', e),
     up: () => penUp('ghost'),
   })
+  // Live drawing with everyone else on the site: the user's strokes are sent
+  // as they're drawn, and other people's are drawn here (ink only; their pens
+  // don't press the logo). See liveSketch.js.
+  const live = createLiveSketch({
+    element: renderer.domElement,
+    offset: () => pan.px,
+    pen: {
+      begin: (id, clientX, clientY, t, age) => PAINT && ink.begin(...toInk({ clientX, clientY }), t, id, { age }),
+      move: (id, clientX, clientY, t) => PAINT && ink.move(...toInk({ clientX, clientY }), t, id),
+      end: (id) => PAINT && ink.end(id),
+    },
+    onClear: () => ink.clear(),
+  })
+  // Pointer listeners: recorded for the intro (while recording) and sent live.
+  // While drawing is off (see setDrawing) a press doesn't start a stroke (and
+  // isn't sent); the pointer still steers the light.
+  let drawing = true
+  const logged = (kind, fn) => {
+    const sent = live.listen(kind, fn)
+    return intro.listen(kind, (e) => (kind === 'down' && !drawing ? onPointerMove(e) : sent(e)))
+  }
   const listeners = [
-    [renderer.domElement, 'pointermove', intro.listen('move', onPointerMove)],
-    [renderer.domElement, 'pointerleave', intro.listen('leave', onPointerLeave)],
-    [renderer.domElement, 'pointerdown', intro.listen('down', onPointerDown)],
-    [window, 'pointerup', intro.listen('up', onPointerUp)],
-    [window, 'pointercancel', intro.listen('up', onPointerUp)],
+    [renderer.domElement, 'pointermove', logged('move', onPointerMove)],
+    [renderer.domElement, 'pointerleave', logged('leave', onPointerLeave)],
+    [renderer.domElement, 'pointerdown', logged('down', onPointerDown)],
+    [window, 'pointerup', logged('up', onPointerUp)],
+    [window, 'pointercancel', logged('up', onPointerUp)],
     [window, 'keydown', (e) => {
       if (e.key.toLowerCase() === 'd' && !e.metaKey && !e.ctrlKey && !e.altKey) setInkDebug(!embossUniforms.inkDebug.value)
     }],
@@ -925,16 +1017,26 @@ export async function createPaperScene(container, logoUrl) {
   const themeMeta = document.querySelector('meta[name="theme-color"]')
   let barsAt = 0
   let barColors = ''
+  // (Read back without waiting for the GPU, so it never stalls a frame.)
+  let barsReading = false
   const matchBars = () => {
-    if (!paper.visible || elapsed - barsAt < 0.4) return
+    if (!paper.visible || barsReading || elapsed - barsAt < 0.4) return
     barsAt = elapsed
-    const { top, bottom } = haze.edgeColors()
-    const css = (c) => `rgb(${c.map(Math.round).join(', ')})`
-    const next = css(top) + css(bottom)
-    if (next === barColors) return
-    barColors = next
-    document.documentElement.style.backgroundColor = css(bottom)
-    themeMeta?.setAttribute('content', css(top))
+    barsReading = true
+    haze
+      .edgeColors()
+      .then(({ top, bottom }) => {
+        const css = (c) => `rgb(${c.map(Math.round).join(', ')})`
+        const next = css(top) + css(bottom)
+        if (next === barColors) return
+        barColors = next
+        document.documentElement.style.backgroundColor = css(bottom)
+        themeMeta?.setAttribute('content', css(top))
+      })
+      .catch(() => {})
+      .finally(() => {
+        barsReading = false
+      })
   }
 
   const timer = new THREE.Timer()
@@ -1006,9 +1108,19 @@ export async function createPaperScene(container, logoUrl) {
     dust.update(Math.min(dt, 0.1), elapsed, key.position)
     fog.update(Math.min(dt, 0.1), since, dust.wind)
     uploadPending()
+    stepPan(Math.min(dt, 0.25))
+    // Ink fades in with the logo as it embosses on load (following the same
+    // curve), out while drawing is off, and back in after.
+    const inkTarget = drawing ? 1 : 0
+    if (inkToggle !== inkTarget) {
+      const step = Math.min(dt, 0.25) / INK_TOGGLE_TIME
+      inkToggle = inkTarget > inkToggle ? Math.min(1, inkToggle + step) : Math.max(0, inkToggle - step)
+    }
+    ink.uniforms.inkOpacity.value = inkToggle * embossUniforms.emboss.value
     // The saved intro drawing replays once the logo has finished embossing.
     const afterEmboss = since - EMBOSS_DELAY - EMBOSS_DURATION
     intro.update(introStart !== null && afterEmboss >= 0, afterEmboss)
+    live.update()
     ink.setTime(elapsed)
     ink.update(ldt, performance.now())
     ink.flush(renderer)
@@ -1016,7 +1128,34 @@ export async function createPaperScene(container, logoUrl) {
     matchBars()
   })
 
-  return () => {
+  return Object.assign(dispose, {
+    // Pans the view so the sheet (the logo, ink and all) sits `px` CSS px to
+    // the right of where it rests (0 = back to the middle), easing over
+    // PAN_TIME.
+    setPan(px) {
+      if (px === pan.to) return
+      Object.assign(pan, { from: pan.px, to: px, t: 0 })
+    },
+    // Switches the user's drawing off (the ink fades out; strokes arriving
+    // from other people are still laid down, unseen) or back on (it fades
+    // back in).
+    setDrawing(on) {
+      drawing = on
+      if (!on && presses.user.held) onPointerUp()
+    },
+    // How far the view may pan (CSS px), { left, right }; the sheet is rebuilt
+    // with more (or less) paper either side if it changes much.
+    setPanExtent(e) {
+      const next = extent(e)
+      const close = (a, b) => Math.abs(a - b) < 12 && a <= b
+      if (close(next.left, panExtent.left) && close(next.right, panExtent.right)) return
+      panExtent = next
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(rebuild, 200)
+    },
+  })
+
+  function dispose() {
     renderer.setAnimationLoop(null)
     timer.dispose()
     tilt.dispose()
@@ -1025,6 +1164,7 @@ export async function createPaperScene(container, logoUrl) {
     for (const [target, type, fn] of listeners) target.removeEventListener(type, fn)
     debugLegend?.remove()
     intro.dispose()
+    live.dispose()
     textures.dispose()
     for (const t of pending ?? []) t.dispose()
     dust.dispose()
