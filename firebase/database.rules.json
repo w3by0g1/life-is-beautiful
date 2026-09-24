@@ -17,6 +17,7 @@
           "$batch": { ".validate": "newData.isString() && newData.val().length <= 4000" }
         },
         "e": { ".validate": "newData.isBoolean()" },
+        "s": { ".validate": "newData.isString() && newData.val().length <= 24" },
         "$other": { ".validate": false }
       }
     },

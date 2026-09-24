@@ -34,15 +34,21 @@ const LIVE_WINDOW = 20000
 // A live stroke that gets no new points for this long (ms) is finished off
 // (its sender may have closed the page mid-stroke).
 const STALL_TIMEOUT = 8000
+// How long (ms) a frame may spend drawing strokes from before this page
+// opened. Everything from the last few minutes arrives at once on load, and
+// drawing it all in one go would stall the page for as long as it took to
+// draw; instead it goes down over the next few frames.
+const HISTORY_BUDGET = 3
 
 const DOWN = 0
 const MOVE = 1
 
-// element: the canvas (for positions); offset: how far (CSS px) the sheet is
-// panned right; pen: draws other people's strokes, as begin(id, clientX,
+// element: the canvas (for positions); offset/offsetY: how far (CSS px) the
+// sheet is panned right and down; pen: draws other people's strokes, as begin(id, clientX,
 // clientY, timeStamp, ageSeconds), move(id, clientX, clientY, timeStamp) and
-// end(id); onClear: wipes the sheet (when it's cleared for everyone).
-export function createLiveSketch({ element, offset, pen, onClear }) {
+// end(id); penStyle: the pen the user is drawing with (sent with their
+// strokes); onClear: wipes the sheet (when it's cleared for everyone).
+export function createLiveSketch({ element, offset, offsetY = () => 0, pen, penStyle, onClear }) {
   const clientId = Math.random().toString(36).slice(2, 12)
   let fb = null
   let db = null
@@ -56,12 +62,12 @@ export function createLiveSketch({ element, offset, pen, onClear }) {
   const toPath = (clientX, clientY) => {
     const r = element.getBoundingClientRect()
     const m = Math.min(r.width, r.height)
-    return [(clientX - r.left - r.width / 2 - offset()) / m, (clientY - r.top - r.height / 2) / m]
+    return [(clientX - r.left - r.width / 2 - offset()) / m, (clientY - r.top - r.height / 2 - offsetY()) / m]
   }
   const fromPath = (x, y) => {
     const r = element.getBoundingClientRect()
     const m = Math.min(r.width, r.height)
-    return [r.left + r.width / 2 + offset() + x * m, r.top + r.height / 2 + y * m]
+    return [r.left + r.width / 2 + offset() + x * m, r.top + r.height / 2 + offsetY() + y * m]
   }
   const serverNow = () => Date.now() + serverOffset
 
@@ -75,58 +81,95 @@ export function createLiveSketch({ element, offset, pen, onClear }) {
 
   // --- Sending the user's own strokes ------------------------------------
 
-  let mine = null
-  const sendPending = () => {
-    if (!mine || !mine.ref || !mine.pending.length) return
-    const batch = encode(mine.pending)
-    mine.pending = []
-    const key = `b${String(mine.batches++).padStart(4, '0')}`
-    fb.set(fb.child(mine.ref, `p/${key}`), batch).catch(() => {})
+  // The strokes being sent, by pointer: a finger each, so someone drawing with
+  // several at once sends them all.
+  const mine = new Map()
+  const sendPending = (m) => {
+    if (!m.ref || !m.pending.length) return
+    const batch = encode(m.pending)
+    m.pending = []
+    const key = `b${String(m.batches++).padStart(4, '0')}`
+    fb.set(fb.child(m.ref, `p/${key}`), batch).catch(() => {})
   }
   const record = (type, e) => {
     if (!db) return
     if (type === DOWN) {
-      finish()
+      finish(e)
       const ref = fb.push(fb.ref(db, 'strokes'))
-      mine = { ref, start: e.timeStamp, pending: [], batches: 0, timer: null }
-      fb.set(ref, { t: fb.serverTimestamp(), u: clientId }).catch(() => {})
-      mine.timer = setInterval(sendPending, SEND_EVERY)
+      const m = { ref, start: e.timeStamp, pending: [], batches: 0, timer: null }
+      mine.set(e.pointerId, m)
+      fb.set(ref, { t: fb.serverTimestamp(), u: clientId, s: penStyle?.() ?? null }).catch(() => {})
+      m.timer = setInterval(() => sendPending(m), SEND_EVERY)
     }
-    if (!mine) return
+    const m = mine.get(e.pointerId)
+    if (!m) return
     const [x, y] = toPath(e.clientX, e.clientY)
-    mine.pending.push([x, y, e.timeStamp - mine.start])
+    m.pending.push([x, y, e.timeStamp - m.start])
   }
-  const finish = () => {
-    if (!mine) return
-    clearInterval(mine.timer)
-    sendPending()
-    if (mine.ref) fb.update(mine.ref, { e: true }).catch(() => {})
-    mine = null
+  // Ends one pointer's stroke, or (with no event) every one in progress.
+  const finish = (e) => {
+    for (const [pointerId, m] of mine) {
+      if (e && pointerId !== e.pointerId) continue
+      mine.delete(pointerId)
+      clearInterval(m.timer)
+      sendPending(m)
+      if (m.ref) fb.update(m.ref, { e: true }).catch(() => {})
+    }
   }
 
   // --- Replaying everyone else's -------------------------------------------
 
-  // Strokes seen (by id), and the ones being replayed live, oldest first. Each
-  // visitor draws with their own pen, so their strokes play one after another.
+  // Strokes seen (by id), the ones being replayed live, oldest first (each
+  // visitor draws with their own pen, so their strokes play one after
+  // another), and finished ones waiting to be drawn a few per frame.
   const seen = new Map()
   let playing = []
-
-  // Draws a finished (or old) stroke at once, as old as it really is.
-  const drawWhole = (points, ageSeconds) => {
-    if (!points.length) return
-    const base = performance.now() - points[points.length - 1][2]
-    points.forEach(([x, y, t], i) => {
-      const [cx, cy] = fromPath(x, y)
-      if (i === 0) pen.begin('history', cx, cy, base + t, ageSeconds)
-      else pen.move('history', cx, cy, base + t)
-    })
-    pen.end('history')
-  }
+  const waiting = []
 
   const batchesOf = (data) =>
     Object.keys(data?.p ?? {})
       .sort()
       .map((k) => [k, data.p[k]])
+
+  // Draws the strokes that were already finished when they reached us (a whole
+  // sheet of them arrives at once on load), oldest first and only for a few ms
+  // a frame: a long one is picked up again next frame where it left off, so
+  // however many there are, none of it holds up the page. Each is drawn as old
+  // as it really is, so waiting its turn doesn't make it outstay its lifetime.
+  const drawWaiting = () => {
+    const until = performance.now() + HISTORY_BUDGET
+    while (waiting.length) {
+      const s = waiting[0]
+      if (!s.i) {
+        const age = serverNow() - s.t
+        if (!s.points.length || age > STROKE_LIFETIME) {
+          waiting.shift()
+          continue
+        }
+        // Its points are timed from now on, so a stroke left half-drawn
+        // between frames isn't taken for a pen resting on the paper.
+        s.base = performance.now()
+        const [cx, cy] = fromPath(s.points[0][0], s.points[0][1])
+        pen.begin('history', cx, cy, s.base + s.points[0][2], age / 1000, s.style)
+        s.i = 1
+      }
+      while (s.i < s.points.length) {
+        const [x, y, t] = s.points[s.i++]
+        const [cx, cy] = fromPath(x, y)
+        pen.move('history', cx, cy, s.base + t)
+        if (!(s.i & 7) && performance.now() >= until) return
+      }
+      pen.end('history')
+      waiting.shift()
+      if (performance.now() >= until) return
+    }
+  }
+
+  // Drops everything waiting, finishing off a stroke left half-drawn.
+  const dropWaiting = () => {
+    if (waiting[0]?.i) pen.end('history')
+    waiting.length = 0
+  }
 
   const onStroke = (snap) => {
     const id = snap.key
@@ -140,12 +183,12 @@ export function createLiveSketch({ element, offset, pen, onClear }) {
     }
     seen.set(id, true)
     if (data.e || age > LIVE_WINDOW) {
-      drawWhole(batchesOf(data).flatMap(([, b]) => decode(b)), age / 1000)
+      waiting.push({ points: batchesOf(data).flatMap(([, b]) => decode(b)), t: data.t, style: data.s, i: 0, base: 0 })
       return
     }
     // Live: queue its points as they arrive and play them PLAY_DELAY behind.
     const penId = `live:${data.u}`
-    const s = { penId, points: [], next: 0, started: false, ended: false, done: false, start: 0, keys: new Set(), lastAdd: performance.now() }
+    const s = { penId, style: data.s, points: [], next: 0, started: false, ended: false, done: false, start: 0, keys: new Set(), lastAdd: performance.now() }
     playing.push(s)
     const addBatch = (key, text) => {
       if (s.keys.has(key)) return
@@ -167,6 +210,7 @@ export function createLiveSketch({ element, offset, pen, onClear }) {
 
   // Per frame: plays queued live points that are due.
   const update = () => {
+    if (waiting.length) drawWaiting()
     const now = performance.now()
     const busy = new Set()
     for (const s of playing) {
@@ -190,7 +234,7 @@ export function createLiveSketch({ element, offset, pen, onClear }) {
       while (s.next < s.points.length && s.start + s.points[s.next][2] <= now) {
         const [x, y, t] = s.points[s.next]
         const [cx, cy] = fromPath(x, y)
-        if (s.next === 0) pen.begin(penId, cx, cy, s.start + t, 0)
+        if (s.next === 0) pen.begin(penId, cx, cy, s.start + t, 0, s.style)
         else pen.move(penId, cx, cy, s.start + t)
         s.next++
       }
@@ -235,6 +279,7 @@ export function createLiveSketch({ element, offset, pen, onClear }) {
             finish()
             for (const p of playing) p.stop?.()
             playing = []
+            dropWaiting()
             onClear?.()
           }
           firstClear = false
@@ -255,10 +300,10 @@ export function createLiveSketch({ element, offset, pen, onClear }) {
     listen(kind, fn) {
       return (e) => {
         if (kind === 'down') record(DOWN, e)
-        else if (kind === 'move' && mine) {
+        else if (kind === 'move' && mine.has(e.pointerId)) {
           const samples = e.getCoalescedEvents?.()
           for (const ev of samples?.length ? samples : [e]) record(MOVE, ev)
-        } else if (kind === 'up' || kind === 'leave') finish()
+        } else if (kind === 'up' || kind === 'leave') finish(e)
         fn(e)
       }
     },
@@ -266,6 +311,7 @@ export function createLiveSketch({ element, offset, pen, onClear }) {
     dispose() {
       disposed = true
       finish()
+      dropWaiting()
       for (const s of playing) s.stop?.()
       for (const off of unsubscribes) off()
     },

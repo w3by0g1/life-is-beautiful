@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { createDust } from './dust.js'
 import { createFog, FOG_GLSL } from './fog.js'
-import { createInk } from './ink.js'
+import { createInk, DEFAULT_PEN, PENS } from './ink.js'
 import { createHaze } from './haze.js'
 import { createIntro } from './intro.js'
 import { createTilt } from './tilt.js'
@@ -11,7 +11,7 @@ import { generatePaperTextures } from './paperTextures.js'
 
 // Logo diameter as a fraction of the shorter screen side.
 // Panning the view (see setPan): seconds a pan takes, eased in and out.
-const PAN_TIME = 1.3
+const PAN_TIME = 0.7
 // Seconds the ink takes to fade out or back in when drawing is switched off
 // or on (see setDrawing).
 const INK_TOGGLE_TIME = 0.6
@@ -89,7 +89,7 @@ const INK_BASE_REACH = 5
 const INK_BASE_GAP = 1
 // How much ink lands on top of the raised logo lines (0 = none: the nib rides
 // over them without marking them; 1 = as on the paper).
-const INK_ON_LOGO = 1
+const INK_ON_LOGO = 0
 const INK_GAP_AFTER = true
 // Cast shadows from the raised logo: how far a full-height ridge's shadow
 // reaches across the paper (the screen's shorter side is 2, so it stays the
@@ -153,6 +153,10 @@ const HAZE_TINT = 0.12
 // How much of the haze lies over ink (1 = as over the paper). Lower keeps
 // dark ink dark: over thin lines the haze is mostly the paper around them.
 const INK_HAZE = 0.25
+
+// The screen's shorter side (CSS px) that the pen sizes in ink.js are drawn
+// for; on a smaller screen the pen scales down with the sheet.
+const PEN_AT = 820
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -270,9 +274,13 @@ function makeDataTexture(data, w, h, srgb, mirror = true) {
   return texture
 }
 
-// options.panExtent: how far (CSS px) the view may be panned, { left, right }
-// (see setPan): the sheet is built with that much extra paper on its left (for
-// panning right) and right (for panning left).
+// options.panExtent: how far (CSS px) the view may be panned, { left, right,
+// top, bottom } (see setPan): the sheet is built with that much extra paper on
+// its left (for panning right), right (for panning left), top (for panning
+// down) and bottom (for panning up).
+// options.onReady: called once the sheet appears (its textures are built and
+// its shader compiled), so the page can take away whatever it showed while it
+// was coming.
 export async function createPaperScene(container, logoUrl, options = {}) {
   // No antialiasing, depth or alpha buffers: the scene is one flat sheet with
   // soft-edged dust, so they'd only cost memory (a lot of it on Retina screens).
@@ -369,9 +377,11 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     // offset zw). Identity except just after a resize, while those are still
     // laid out for the old window size (see `fit`).
     paperRemap: { value: new THREE.Vector4(1, 1, 0, 0) },
-    // How far the view is panned, as a fraction of the screen width (the
-    // sheet, and everything on it, moves right by this much).
+    // How far the view is panned, as a fraction of the screen's width and
+    // height (the sheet, and everything on it, moves right and down by this
+    // much).
     panU: { value: 0 },
+    panV: { value: 0 },
     inkRemap: { value: new THREE.Vector4(1, 1, 0, 0) },
   }
   paperMat.onBeforeCompile = (shader) => {
@@ -398,6 +408,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
         uniform float paperAspect;
         uniform vec4 paperRemap;
         uniform float panU;
+        uniform float panV;
         uniform vec4 inkRemap;
         uniform sampler2D paintMap;
         uniform vec4 inkBounds;
@@ -471,7 +482,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
           // World position: x right, z down the screen (UV v runs up the screen).
           // Panning moves the sheet (and the light and fog over it) like a
           // camera move.
-          vec2 wp = vec2( ( vNormalMapUv.x - panU - 0.5 ) * 2.0 * paperAspect, ( 0.5 - vNormalMapUv.y ) * 2.0 );
+          vec2 wp = vec2( ( vNormalMapUv.x - panU - 0.5 ) * 2.0 * paperAspect, ( 0.5 - vNormalMapUv.y - panV ) * 2.0 );
 
           // Within the pointer's circle the logo's relief is flipped from raised
           // to pressed in, fading back to raised across the soft edge. Deepest
@@ -553,9 +564,11 @@ export async function createPaperScene(container, logoUrl, options = {}) {
             inkCover *= 1.0 - 0.75 * skip;
             inkCover = max( inkCover, smoothstep( 0.04, 0.3, inkA ) * grooveAll );
             inkCol *= 1.0 - inkGroove * grooveAll;
-            // None on top of the raised logo lines (their embossed shape, not
-            // the press, so it holds as the ink goes down).
-            inkCover *= mix( 1.0, inkOnLogo, smoothstep( 0.3, 0.6, logoT.b * emboss ) );
+            // None anywhere on the raised logo lines: from where they first
+            // rise, not just at their tops, so nothing of a stroke shows on
+            // them. (Their embossed shape, not the press, so it holds as the
+            // ink goes down.)
+            inkCover *= mix( 1.0, inkOnLogo, smoothstep( 0.02, 0.1, logoT.b * emboss ) );
 
             // The foot of raised lines: low here, but a raised line close by
             // that the pen has just hopped over holds the nib up off the paper
@@ -664,6 +677,8 @@ export async function createPaperScene(container, logoUrl, options = {}) {
 
   const dust = createDust(scene, renderer.getPixelRatio())
   const ink = createInk()
+  // The pen the user draws with (chosen in the dev menu; see ink.js).
+  let userPen = DEFAULT_PEN
   // Hidden until the logo embosses, and while drawing is off (see the loop):
   // how far the drawing on/off fade has got (0–1).
   ink.uniforms.inkOpacity.value = 0
@@ -673,6 +688,9 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   embossUniforms.inkBounds.value = ink.bounds
   const haze = createHaze(renderer, { blur: HAZE_BLUR, amount: HAZE_AMOUNT, tint: HAZE_TINT })
   haze.setMask(ink.texture, embossUniforms.inkRemap.value, ink.uniforms.inkOpacity, INK_HAZE)
+  // Not over the raised logo, where the ink itself is held off (see
+  // INK_ON_LOGO): otherwise the haze thinning alone would show the stroke.
+  haze.setMaskHold(embossUniforms.logoMap, embossUniforms.paperRemap.value, embossUniforms.emboss, [0.02, 0.1])
 
   // Freshly built textures (on load, and after a resize) are uploaded to the
   // GPU one per frame, then swapped in together, so no single frame stalls.
@@ -680,7 +698,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   let pending = null
   // What the latest texture request, the paper textures in use, and the ink
   // canvas were laid out for: the window size (CSS px) and how much extra
-  // paper there is to its left and right, [w, h, left, right].
+  // paper there is around it, [w, h, left, right, top, bottom].
   let requestedSize = null
   let paperSize = null
   let inkSize = null
@@ -727,6 +745,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
         paper.visible = true
         introStart = elapsed
         renderer.domElement.style.opacity = '1'
+        options.onReady?.()
       })
     }
   }
@@ -740,17 +759,24 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   const viewSize = () => [container.clientWidth, container.clientHeight]
 
   // Screen UV → UV in something laid out for a window of size w × h (with
-  // `extra` more paper to its left), with the view panned: the logo's centre
-  // lines up with the screen's (shifted right by the pan), and sizes scale
-  // with the shorter side, like the logo.
+  // more paper around it: `left`, `right`, `top` and `bottom`), with the view
+  // panned: the logo's centre lines up with the screen's (shifted by the pan),
+  // and sizes scale with the shorter side, like the logo.
   const remap = (out, size) => {
     const [vw, vh] = viewSize()
-    const [w, h, left = 0, right = 0] = size ?? [vw, vh]
-    const total = w + left + right
+    const [w, h, left = 0, right = 0, top = 0, bottom = 0] = size ?? [vw, vh]
+    const totalW = w + left + right
+    const totalH = h + top + bottom
     const k = Math.min(w, h) / Math.min(vw, vh)
-    const sx = (vw * k) / total
-    const sy = (vh * k) / h
-    out.set(sx, sy, (left + w / 2 - (vw / 2 + pan.px) * k) / total, 0.5 - 0.5 * sy)
+    const sx = (vw * k) / totalW
+    const sy = (vh * k) / totalH
+    out.set(
+      sx,
+      sy,
+      (left + w / 2 - (vw / 2 + pan.px) * k) / totalW,
+      // (UV v runs up the screen, the sheet's y down it.)
+      1 - (top + h / 2 + (vh / 2 - panY()) * k) / totalH,
+    )
   }
   const fitRemaps = () => {
     remap(embossUniforms.paperRemap.value, paperSize)
@@ -758,14 +784,23 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   }
 
   // The view's pan (see setPan): where it is and where it's easing to (CSS
-  // px), and how far through the move it is (0–1).
-  const pan = { px: 0, from: 0, to: 0, t: 1 }
+  // px, across and down), and how far through the move it is (0–1). `restY`
+  // is where the sheet sits when it isn't panned (see setRest).
+  const pan = { px: 0, py: 0, fromX: 0, toX: 0, fromY: 0, toY: 0, t: 1 }
+  let restY = 0
+  const panY = () => pan.py + restY
+  const panUniforms = () => {
+    const [vw, vh] = viewSize()
+    embossUniforms.panU.value = pan.px / vw
+    embossUniforms.panV.value = panY() / vh
+  }
   const stepPan = (dt) => {
     if (pan.t >= 1) return
     pan.t = Math.min(1, pan.t + dt / PAN_TIME)
     const e = pan.t < 0.5 ? 4 * pan.t ** 3 : 1 - (-2 * pan.t + 2) ** 3 / 2
-    pan.px = pan.from + (pan.to - pan.from) * e
-    embossUniforms.panU.value = pan.px / container.clientWidth
+    pan.px = pan.fromX + (pan.toX - pan.fromX) * e
+    pan.py = pan.fromY + (pan.toY - pan.fromY) * e
+    panUniforms()
     fitRemaps()
   }
 
@@ -787,7 +822,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     // run 2 per screen height).
     embossUniforms.shadowLength.value = SHADOW_LENGTH * Math.min(1, aspect)
     dust.setAspect(aspect)
-    embossUniforms.panU.value = pan.px / vw
+    panUniforms()
     fitRemaps()
     // The page behind the canvas gets the same gradient as the paper (corner
     // to corner, as in paperTextures.js), for any area it doesn't cover.
@@ -795,33 +830,42 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     document.documentElement.style.backgroundImage = `linear-gradient(${angle}deg, ${PAPER_FROM}, ${PAPER_TO})`
   }
 
-  // How much extra paper (CSS px) to build either side, for panning.
-  const extent = (e) => ({ left: Math.max(0, Math.ceil(e?.left ?? 0)), right: Math.max(0, Math.ceil(e?.right ?? 0)) })
+  // How much extra paper (CSS px) to build around the screen, for panning.
+  const side = (v) => Math.max(0, Math.ceil(v ?? 0))
+  const extent = (e) => ({ left: side(e?.left), right: side(e?.right), top: side(e?.top), bottom: side(e?.bottom) })
   let panExtent = extent(options.panExtent)
   const rebuild = () => {
     const [vw, vh] = viewSize()
-    const { left, right } = panExtent
-    const extra = left + right
-    const scale = Math.min(1, MAX_TEX / (Math.max(vw + extra, vh) * renderer.getPixelRatio()))
-    const tw = Math.round((vw + extra) * renderer.getPixelRatio() * scale)
-    const th = Math.round(vh * renderer.getPixelRatio() * scale)
+    const { left, right, top, bottom } = panExtent
+    const sheetW = vw + left + right
+    const sheetH = vh + top + bottom
+    const scale = Math.min(1, MAX_TEX / (Math.max(sheetW, sheetH) * renderer.getPixelRatio()))
+    const tw = Math.round(sheetW * renderer.getPixelRatio() * scale)
+    const th = Math.round(sheetH * renderer.getPixelRatio() * scale)
     // The ink covers the extra paper too, so names can be written there.
-    const inkScale = Math.min(1, INK_MAX_TEX / (Math.max(vw + extra, vh) * renderer.getPixelRatio()))
-    const iw = Math.round((vw + extra) * renderer.getPixelRatio() * inkScale)
-    const ih = Math.round(vh * renderer.getPixelRatio() * inkScale)
-    const ipx = iw / (vw + extra)
-    ink.resize(iw, ih, ipx, { cx: (left + vw / 2) * ipx, base: Math.min(vw, vh) * ipx })
+    const inkScale = Math.min(1, INK_MAX_TEX / (Math.max(sheetW, sheetH) * renderer.getPixelRatio()))
+    const iw = Math.round(sheetW * renderer.getPixelRatio() * inkScale)
+    const ih = Math.round(sheetH * renderer.getPixelRatio() * inkScale)
+    const ipx = iw / sheetW
+    ink.resize(iw, ih, ipx, { cx: (left + vw / 2) * ipx, cy: (top + vh / 2) * ipx, base: Math.min(vw, vh) * ipx })
+    // A smaller screen holds a smaller sheet, so it takes a smaller pen (see
+    // setPenScale); never below half, or a phone's lines would be wispy.
+    ink.setPenScale(Math.min(1, Math.max(0.5, Math.min(vw, vh) / PEN_AT)))
     // Ink ages must cover the soft edge the shader gives ink (its outer ring).
     ink.setBlurReach(INK_BLEED * 2 + 1)
-    inkSize = [vw, vh, left, right]
+    inkSize = [vw, vh, left, right, top, bottom]
     embossUniforms.paintTexel.value.set(1 / iw, 1 / ih)
     embossUniforms.inkBleed.value = INK_BLEED * ipx
     embossUniforms.inkBaseReach.value = INK_BASE_REACH * ipx
     fitRemaps()
     // The old textures stay in use until the new ones are ready.
-    requestedSize = [vw, vh, left, right]
-    const tpx = tw / (vw + extra)
-    textures.request(tw, th, tpx, { logoX: (left + vw / 2) * tpx, logoBase: Math.min(vw, vh) * tpx })
+    requestedSize = [vw, vh, left, right, top, bottom]
+    const tpx = tw / sheetW
+    textures.request(tw, th, tpx, {
+      logoX: (left + vw / 2) * tpx,
+      logoY: (top + vh / 2) * tpx,
+      logoBase: Math.min(vw, vh) * tpx,
+    })
   }
   fit()
   rebuild()
@@ -846,15 +890,18 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   const toWorld = (e) => {
     const r = renderer.domElement.getBoundingClientRect()
     const u = (e.clientX - r.left) / r.width - embossUniforms.panU.value
-    return [(u * 2 - 1) * embossUniforms.paperAspect.value, ((e.clientY - r.top) / r.height) * 2 - 1]
+    const v = (e.clientY - r.top) / r.height - embossUniforms.panV.value
+    return [(u * 2 - 1) * embossUniforms.paperAspect.value, v * 2 - 1]
   }
-  // (Through the same remap as the shader, so it lines up mid-resize too.)
+  // (Through the same remap as the shader, so it lines up mid-resize too. The
+  // remap is in UV, whose v runs up the screen, while the canvas's y runs
+  // down, so its vertical offset is flipped here.)
   const toInk = (e) => {
     const r = renderer.domElement.getBoundingClientRect()
     const m = embossUniforms.inkRemap.value
     return [
       (((e.clientX - r.left) / r.width) * m.x + m.z) * ink.width,
-      (((e.clientY - r.top) / r.height) * m.y + m.w) * ink.height,
+      (((e.clientY - r.top) / r.height) * m.y + (1 - m.y - m.w)) * ink.height,
     ]
   }
 
@@ -874,53 +921,91 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     user: makePress(embossUniforms.pressCenter, embossUniforms.pressAmount),
     ghost: makePress(embossUniforms.ghostCenter, embossUniforms.ghostAmount),
   }
-  // A pen (user or ghost) touching down, moving and lifting: its press and its ink.
+  // A pen touching down, moving and lifting: its ink, and its press if it has
+  // one (the shader holds one press for the user and one for the intro, so of
+  // several fingers only the one drawing with the 'user' pen presses).
   const penDown = (id, e) => {
     const p = presses[id]
-    p.held = p.pressing = true
-    p.target.set(...toWorld(e))
-    p.center.copy(p.target)
-    p.lastDrop.copy(p.target)
+    if (p) {
+      p.held = p.pressing = true
+      p.target.set(...toWorld(e))
+      p.center.copy(p.target)
+      p.lastDrop.copy(p.target)
+    }
     if (PAINT) ink.begin(...toInk(e), e.timeStamp, id)
   }
   const penMove = (id, e) => {
     const p = presses[id]
-    if (!p.held) return
-    p.target.set(...toWorld(e))
+    if (p) {
+      if (!p.held) return
+      p.target.set(...toWorld(e))
+    }
     if (!PAINT) return
     // Use every sample the browser collected since the last event for smooth curves.
     const events = e.getCoalescedEvents?.() ?? []
     for (const ev of events.length ? events : [e]) ink.move(...toInk(ev), ev.timeStamp, id)
   }
   const penUp = (id) => {
-    presses[id].held = false
+    const p = presses[id]
+    if (p) p.held = false
     ink.end(id)
+  }
+
+  // Every finger draws its own stroke: each pointer holding the page takes a
+  // pen of its own, from a handful of ids handed back as fingers lift. The one
+  // holding 'user' also presses the logo and steers the light; the rest only
+  // ink.
+  const penIds = ['user']
+  const pointerPens = new Map()
+  const penFor = (pointerId) => {
+    const held = new Set(pointerPens.values())
+    let id = penIds.find((p) => !held.has(p))
+    if (!id) penIds.push((id = `user${penIds.length + 1}`))
+    pointerPens.set(pointerId, id)
+    ink.setPenStyle(id, userPen)
+    return id
+  }
+  // Lifts one pointer's pen, or (with no pointer) all of them.
+  const release = (e) => {
+    for (const [pointerId, id] of pointerPens) {
+      if (e && pointerId !== e.pointerId) continue
+      pointerPens.delete(pointerId)
+      penUp(id)
+    }
   }
 
   // The user's pointer: also steers the light (a mouse always; a finger only
   // where the phone's tilt isn't available).
   const tilt = createTilt()
   const onPointerMove = (e) => {
-    if (!(tilt.active && e.pointerType === 'touch')) {
+    const id = pointerPens.get(e.pointerId)
+    // Only a pointer that isn't drawing (a mouse moving over the sheet) or the
+    // one with the press moves the light; other fingers leave it be.
+    if ((!id || id === 'user') && !(tilt.active && e.pointerType === 'touch')) {
       const r = renderer.domElement.getBoundingClientRect()
       pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1
       pointer.y = ((e.clientY - r.top) / r.height) * 2 - 1
       pointer.active = true
       pointer.touch = e.pointerType === 'touch'
     }
-    penMove('user', e)
+    if (id) penMove(id, e)
   }
-  const onPointerLeave = () => {
+  const onPointerLeave = (e) => {
     pointer.active = false
-    penUp('user')
+    release(e)
   }
   const onPointerDown = (e) => {
     onPointerMove(e)
-    penDown('user', e)
+    penDown(penFor(e.pointerId), e)
     // Keep receiving moves while dragging, even past the edge of the canvas.
-    renderer.domElement.setPointerCapture?.(e.pointerId)
+    // (A pointer that has already gone can't be captured; never mind.)
+    try {
+      renderer.domElement.setPointerCapture?.(e.pointerId)
+    } catch {
+      /* ignore */
+    }
   }
-  const onPointerUp = () => penUp('user')
+  const onPointerUp = (e) => release(e)
 
   // Records drawings into a bank and replays them, at random, as a second
   // "ghost" pen that draws and presses but leaves the light alone; see intro.js.
@@ -928,6 +1013,16 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     element: renderer.domElement,
     // Replays follow the sheet when the view is panned.
     offset: () => pan.px,
+    offsetY: () => panY(),
+    // The dev panel's pen picker.
+    pens: {
+      list: PENS,
+      get: () => userPen,
+      set: (name) => {
+        userPen = name
+        for (const id of penIds) ink.setPenStyle(id, name)
+      },
+    },
     // The dev panel's Clear paper button: wipes this sheet at once, and the
     // shared drawing for everyone (through the dev server).
     clearPaper: () => {
@@ -943,12 +1038,19 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   })
   // Live drawing with everyone else on the site: the user's strokes are sent
   // as they're drawn, and other people's are drawn here (ink only; their pens
-  // don't press the logo). See liveSketch.js.
+  // don't press the logo), each with the pen it was drawn with. See
+  // liveSketch.js.
   const live = createLiveSketch({
     element: renderer.domElement,
     offset: () => pan.px,
+    offsetY: () => panY(),
+    penStyle: () => userPen,
     pen: {
-      begin: (id, clientX, clientY, t, age) => PAINT && ink.begin(...toInk({ clientX, clientY }), t, id, { age }),
+      begin: (id, clientX, clientY, t, age, style) => {
+        if (!PAINT) return
+        ink.setPenStyle(id, style ?? DEFAULT_PEN)
+        ink.begin(...toInk({ clientX, clientY }), t, id, { age })
+      },
       move: (id, clientX, clientY, t) => PAINT && ink.move(...toInk({ clientX, clientY }), t, id),
       end: (id) => PAINT && ink.end(id),
     },
@@ -1130,25 +1232,35 @@ export async function createPaperScene(container, logoUrl, options = {}) {
 
   return Object.assign(dispose, {
     // Pans the view so the sheet (the logo, ink and all) sits `px` CSS px to
-    // the right of where it rests (0 = back to the middle), easing over
-    // PAN_TIME.
-    setPan(px) {
-      if (px === pan.to) return
-      Object.assign(pan, { from: pan.px, to: px, t: 0 })
+    // the right and `py` down from where it rests (0, 0 = back to the middle),
+    // easing over PAN_TIME.
+    setPan(px, py = 0) {
+      if (px === pan.toX && py === pan.toY) return
+      Object.assign(pan, { fromX: pan.px, toX: px, fromY: pan.py, toY: py, t: 0 })
+    },
+    // Where the sheet sits when it isn't panned: `py` CSS px down from the
+    // middle of the scene. The scene is taller than the screen on phones (it
+    // runs up behind the status bar; see fullBleed.js), so this is how the
+    // logo is brought back to the middle of what's on screen.
+    setRest(py) {
+      if (py === restY) return
+      restY = py
+      panUniforms()
+      fitRemaps()
     },
     // Switches the user's drawing off (the ink fades out; strokes arriving
     // from other people are still laid down, unseen) or back on (it fades
     // back in).
     setDrawing(on) {
       drawing = on
-      if (!on && presses.user.held) onPointerUp()
+      if (!on) release()
     },
     // How far the view may pan (CSS px), { left, right }; the sheet is rebuilt
     // with more (or less) paper either side if it changes much.
     setPanExtent(e) {
       const next = extent(e)
       const close = (a, b) => Math.abs(a - b) < 12 && a <= b
-      if (close(next.left, panExtent.left) && close(next.right, panExtent.right)) return
+      if (['left', 'right', 'top', 'bottom'].every((k) => close(next[k], panExtent[k]))) return
       panExtent = next
       clearTimeout(resizeTimer)
       resizeTimer = setTimeout(rebuild, 200)

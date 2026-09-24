@@ -51,7 +51,9 @@ const blurFragment = /* glsl */ `
 
 // The haze is lighter where the mask (optional; e.g. ink laid on the paper)
 // covers the screen: the mask's alpha, read at the remapped UV, fades the haze
-// to `maskKeep` of its strength.
+// to `maskKeep` of its strength. A second, optional mask (the logo's height)
+// holds that back where no ink shows anyway, so a stroke crossing the raised
+// logo leaves no ghost of itself on it.
 const compositeFragment = /* glsl */ `
   uniform sampler2D tScene;
   uniform sampler2D tBlur;
@@ -61,6 +63,10 @@ const compositeFragment = /* glsl */ `
   uniform vec4 maskRemap;
   uniform float maskOn;
   uniform float maskKeep;
+  uniform sampler2D tHold;
+  uniform vec4 holdRemap;
+  uniform float holdOn;
+  uniform vec2 holdRange;
   varying vec2 vUv;
   void main() {
     vec3 sharp = texture2D(tScene, vUv).rgb;
@@ -69,7 +75,13 @@ const compositeFragment = /* glsl */ `
     if (maskOn > 0.0) {
       vec2 mUv = vUv * maskRemap.xy + maskRemap.zw;
       if (all(greaterThanEqual(mUv, vec2(0.0))) && all(lessThanEqual(mUv, vec2(1.0)))) {
-        amt *= mix(1.0, maskKeep, texture2D(tMask, mUv).a * maskOn);
+        float m = texture2D(tMask, mUv).a * maskOn;
+        if (holdOn > 0.0) {
+          vec2 hUv = vUv * holdRemap.xy + holdRemap.zw;
+          float h = texture2D(tHold, hUv).b * holdOn;
+          m *= 1.0 - smoothstep(holdRange.x, holdRange.y, h);
+        }
+        amt *= mix(1.0, maskKeep, m);
       }
     }
     gl_FragColor = vec4(mix(sharp, soft, amt), 1.0);
@@ -131,6 +143,10 @@ export function createHaze(renderer, { blur, amount, tint }) {
     maskRemap: { value: new THREE.Vector4(1, 1, 0, 0) },
     maskOn: { value: 0 },
     maskKeep: { value: 1 },
+    tHold: { value: null },
+    holdRemap: { value: new THREE.Vector4(1, 1, 0, 0) },
+    holdOn: { value: 0 },
+    holdRange: { value: new THREE.Vector2(0, 1) },
   })
   const quad = new THREE.Mesh(geometry, downsample)
   quad.frustumCulled = false
@@ -158,6 +174,18 @@ export function createHaze(renderer, { blur, amount, tint }) {
       u.maskRemap.value = remap
       u.maskOn = strength
       u.maskKeep.value = keep
+    },
+
+    // Holds the mask back where a height map is high: texture (a uniform-like
+    // object holding it, kept live, its blue channel the height), remap
+    // (screen UV → its UV, kept live), strength (a uniform-like object scaling
+    // the height, kept live) and range (the heights it fades out over).
+    setMaskHold(texture, remap, strength, [from, to]) {
+      const u = composite.uniforms
+      u.tHold = texture
+      u.holdRemap.value = remap
+      u.holdOn = strength
+      u.holdRange.value.set(from, to)
     },
 
     // cssW/cssH: canvas size in CSS px; dpr: the renderer's pixel ratio.

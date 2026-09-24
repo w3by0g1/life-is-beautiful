@@ -59,7 +59,7 @@ function ReleaseText({ item, kind }) {
         <Listen href={item.link} />
       </div>
       <p className="ap-meta">
-        {[formatDate(item.date), kind].filter(Boolean).join(" • ")}
+        {[formatDate(item.date), kind].filter(Boolean).join(" · ")}
       </p>
       <div className="ap-rich">
         <RichText value={item.description} />
@@ -79,10 +79,7 @@ function Album({ item, artistName }) {
           <ol className="ap-tracks">
             {tracks.map((t, i) => (
               <li key={t._key}>
-                {/* A number on a filled dot, as in the design. */}
-                <span className="ap-track-no">
-                  <span className="ap-track-dot">{i + 1}</span>
-                </span>
+                <span className="ap-track-no">{i + 1}</span>
                 <strong>{t.title}</strong> {t.credit || artistName}
               </li>
             ))}

@@ -100,7 +100,7 @@ function boxBlurV(src, dst, w, h, r, sums) {
 function buildLogoHeight(img, w, h, S) {
   const size = S.logoBase * S.logoFraction
   const x = S.logoX - size / 2
-  const y = (h - size) / 2
+  const y = S.logoY - size / 2
   // Blur radii were tuned for a ~635px logo; keep the profile consistent at any size.
   const k = size / 635
 
@@ -336,7 +336,7 @@ function addCreases(surface, w, h, px, S) {
   // its spot relative to the logo when the window is resized.
   const m = S.logoBase
   const ix = S.logoX + (random() - 0.5) * 0.8 * m
-  const iy = h / 2 + (random() - 0.5) * 0.8 * m
+  const iy = S.logoY + (random() - 0.5) * 0.8 * m
   for (let n = 0; n < S.creases; n++) {
     const ang = baseAng + (n % 2) * (Math.PI / 2)
     const dx = Math.cos(ang)
@@ -507,12 +507,12 @@ function addVellumSpeckle(ctx, w, h, px, speckle) {
 
 // img: the logo (ImageBitmap, image or canvas). w, h: texture size. px: texture
 // pixels per CSS pixel. S: settings from paperScene.js.
-// S.logoX: where the logo's centre goes across the sheet (texels), and
+// S.logoX / S.logoY: where the logo's centre goes on the sheet (texels), and
 // S.logoBase: the length (texels) the logo is sized from (the screen's shorter
-// side). The sheet can be wider than the screen (extra paper to the left, for
-// panning), so these default to the middle and the shorter side.
+// side). The sheet can be bigger than the screen (extra paper to pan onto), so
+// these default to the middle and the shorter side.
 export function generatePaperTextures(img, w, h, px, settings) {
-  const S = { logoX: w / 2, logoBase: Math.min(w, h), ...settings }
+  const S = { logoX: w / 2, logoY: h / 2, logoBase: Math.min(w, h), ...settings }
   const stream = (k) => {
     if (S.seed === undefined) random = Math.random
     else seedRandom(S.seed + k * 0x9e3779b9)

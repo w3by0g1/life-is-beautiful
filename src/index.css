@@ -71,6 +71,45 @@ body {
   height: calc(100lvh + var(--overhang, 0px));
 }
 
+/* The site's name in the middle of the page while the paper is being made
+   (its textures are built in a worker and its shader compiled, which takes a
+   moment); it fades out as the sheet fades in, and isn't there to be clicked
+   or drawn through. */
+.opening {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-size: 22px;
+  letter-spacing: 0.02em;
+  color: #1a1a1a;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.opening.gone {
+  opacity: 0;
+}
+
+/* The header, the artist list and the info text only appear once the sheet
+   has (see the opening title above): they fade in as it finishes fading out. */
+.site-header,
+.artists,
+.info-text {
+  opacity: 0;
+  transition: opacity 0.7s ease 0.55s;
+}
+
+.site-header.ready,
+.artists.ready,
+.info-text.ready {
+  opacity: 1;
+}
+
 /* Header over the top of the sheet: logo and links only (the paper shows
    through, and everywhere else stays drawable). */
 .site-header {
@@ -80,14 +119,16 @@ body {
   right: 0;
   z-index: 3;
   height: 57px;
+  /* Sits a little below the top edge (and below a phone's status bar). */
+  padding-top: 18px;
   display: flex;
   align-items: center;
   gap: clamp(20px, 2.6vw, 37px);
-  padding: 0 clamp(16px, 2.2vw, 32px);
+  padding: 10px clamp(16px, 2.2vw, 32px);
   padding-left: calc(clamp(16px, 2.2vw, 32px) + env(safe-area-inset-left, 0px));
   pointer-events: none;
   font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
-  font-size: 14px;
+  font-size: 16px;
   color: #111;
 }
 
@@ -101,19 +142,32 @@ body {
   display: flex;
   gap: clamp(18px, 2.6vw, 37px);
   /* A soft white glow all around the letters. */
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+  text-shadow: 0 0 7px rgba(255, 255, 255, 0.95);
 }
 
-.site-header nav a:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-thickness: 1px;
+/* Hovering sets a link bold, like the view you're in; nothing in the header
+   is underlined. (Only where there's a pointer to hover with: a phone keeps
+   :hover on whatever was tapped last.) */
+@media (hover: hover) and (pointer: fine) {
+  .site-header nav a:hover {
+    font-weight: 600;
+  }
 }
 
+/* The view you're in is set bold. Each link keeps the width of its bold self
+   (the hidden copy below), so the row doesn't shuffle along as it changes. */
 .site-header nav a.active {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-thickness: 1px;
+  font-weight: 600;
+}
+
+.site-header nav a::after {
+  content: attr(data-label);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  font-weight: 600;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* The artist list beside the logo (#artists). Right-aligned, level with the
@@ -141,6 +195,35 @@ body {
   pointer-events: none;
 }
 
+/* On a narrow screen the names sit centred above the logo (the sheet pans up
+   to make room; see layout.js), so the list hangs from its bottom edge. */
+.artists.tall {
+  transform: translateY(-100%);
+  text-align: center;
+  white-space: normal;
+}
+
+/* There they run on as one centred paragraph, separated by dots, rather than
+   standing one to a line: a phone has the width for it and not the height.
+   (Hovering doesn't bold them there, which would shuffle the line along.) */
+.artists.tall li {
+  display: inline;
+}
+
+.artists.tall li:not(:last-child)::after {
+  content: ' · ';
+  font-weight: 400;
+}
+
+.artists.tall.open li:hover {
+  font-weight: inherit;
+}
+
+/* There the info text sits below the logo, from its top edge. */
+.info-text.tall {
+  transform: none;
+}
+
 .artists li {
   width: fit-content;
   margin-left: auto;
@@ -158,8 +241,8 @@ body {
   pointer-events: auto;
   cursor: default;
   transition:
-    opacity 0.7s ease calc(0.75s + var(--i) * 0.03s),
-    filter 0.9s ease calc(0.75s + var(--i) * 0.03s),
+    opacity 0.7s ease calc(0.4s + var(--i) * 0.03s),
+    filter 0.9s ease calc(0.4s + var(--i) * 0.03s),
     font-weight 0.3s ease;
 }
 
@@ -179,27 +262,36 @@ body {
   position: fixed;
   z-index: 1;
   transform: translateY(-50%);
-  font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: 'EB Garamond', Garamond, 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 21px;
-  line-height: 1.75;
+  line-height: 1.5;
   letter-spacing: -0.01em;
   color: #2a2a2a;
   mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.info-text.open {
+  pointer-events: auto;
+}
+
+/* Each word blurs into focus with its line, a moment after the one above
+   (which line it's on is worked out in InfoText.jsx). */
+.info-word {
+  display: inline-block;
   opacity: 0;
   filter: blur(6px);
-  pointer-events: none;
   transition:
     opacity 0.35s ease,
     filter 0.35s ease;
 }
 
-.info-text.open {
+.info-text.open .info-word {
   opacity: 1;
   filter: blur(0);
-  pointer-events: auto;
   transition:
-    opacity 0.7s ease 0.75s,
-    filter 0.9s ease 0.75s;
+    opacity 0.7s ease calc(0.4s + var(--i, 0) * 0.06s),
+    filter 0.9s ease calc(0.4s + var(--i, 0) * 0.06s);
 }
 
 .info-text p {
@@ -224,8 +316,15 @@ body {
    blurred and lightened, and the artist's profile sits on the left with
    their albums, singles and media on the right (see ArtistPage.jsx). */
 .artist-page {
-  position: fixed;
-  inset: 0;
+  /* Laid out like the scene (not fixed), so it reaches up behind a phone's
+     status bar and down under its toolbar; otherwise a strip of bare paper
+     shows above and below the wash. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100vh + var(--overhang, 0px));
+  height: calc(100lvh + var(--overhang, 0px));
   z-index: 2;
   overflow: hidden;
   /* How much the sheet behind is lightened (the wash's opacity and a touch of
@@ -256,7 +355,7 @@ body {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  --fade-top: 96px;
+  --fade-top: calc(96px + var(--overhang, 0px));
   --fade-bottom: 72px;
   -webkit-mask-image: linear-gradient(
     to bottom,
@@ -281,7 +380,7 @@ body {
   max-width: 1240px;
   margin: 0 auto;
   padding: 124px 100px 96px;
-  padding-top: calc(124px + env(safe-area-inset-top, 0px));
+  padding-top: calc(124px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
   opacity: 0;
   transform: translateY(8px);
   transition:
@@ -478,31 +577,13 @@ body {
   color: #666;
 }
 
+/* The track number, plainly set in the page's Garamond like the rest of the
+   line. */
 .ap-track-no {
   display: inline-block;
   width: 24px;
   /* Its own box would otherwise inherit the line's hanging indent. */
   text-indent: 0;
-}
-
-/* The track number in Neue Haas Grotesk Medium, white on a grey dot (it
-   stretches into a pill for two digits). */
-.ap-track-dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  border-radius: 7px;
-  background: #777;
-  color: #fff;
-  font-family: 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-weight: 500;
-  font-size: 9.5px;
-  line-height: 1;
-  vertical-align: 2px;
 }
 
 .ap-media img,
@@ -547,51 +628,72 @@ body {
 }
 
 /* The happenings calendar (#happenings; see HappeningsPage.jsx): the month's
-   days on the left, the chosen event's details on the right. Shares the
+   days, centred on their own until an event is chosen, and then with its
+   details beside them on the left, the pair centred together. Shares the
    artist page's blurred background and masked scrolling. */
 .hp-inner {
-  grid-template-columns: minmax(0, 893fr) minmax(0, 401fr);
-  gap: 51px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
   max-width: 1440px;
-  padding: 96px 48px 80px;
-  padding-top: calc(96px + env(safe-area-inset-top, 0px));
+  padding: 36px 48px 80px;
+  padding-top: calc(36px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
+}
+
+/* The details sit to the calendar's right, staying in view as the months
+   scroll past, opening from nothing (so the calendar slides over rather than
+   jumping). */
+.hp-side {
+  position: sticky;
+  top: 120px;
+  align-self: flex-start;
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    width 0.45s cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 0.3s ease;
+}
+
+.hp-inner.has-event .hp-side {
+  /* The details, plus the 20px gap to the calendar. */
+  width: 421px;
+  padding-left: 20px;
+  opacity: 1;
+  transition:
+    width 0.45s cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 0.4s ease 0.15s;
+}
+
+.hp-details {
+  width: 401px;
+}
+
+/* As wide as its grid, so the pair centres as one. The days are sized so
+   that five weeks fill 95% of the height left on screen; a six-week month
+   runs a little past the bottom. */
+.hp-calendar {
+  flex: 0 0 auto;
+  width: min(100%, calc(((100vh - var(--around)) * 0.95 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
+  width: min(100%, calc(((100svh - var(--around)) * 0.95 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
+  --gap: 12px;
+  --around: 196px;
 }
 
 .hp-month {
   display: flex;
-  align-items: center;
-  gap: 26px;
+  align-items: baseline;
+  gap: 18px;
 }
 
 .hp-month h2 {
   margin: 0;
-  min-width: 7.2em;
-  text-align: center;
-  font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-size: 30px;
+  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-size: 32px;
   font-weight: 400;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: #222;
-}
-
-.hp-month button {
-  padding: 0 4px;
-  border: 0;
-  background: none;
-  font-family: 'Rigid Square Arrows', sans-serif;
-  font-size: 30px;
-  line-height: 1;
-  color: #222;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-
-.hp-month button:first-child:hover {
-  transform: translateX(-3px);
-}
-
-.hp-month button:last-child:hover {
-  transform: translateX(3px);
 }
 
 .hp-grid {
@@ -602,12 +704,9 @@ body {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--gap);
-  margin-top: 18px;
-  /* As wide as the column allows, but narrow enough that six weeks of A4
-     days fit in the window's height, so the days are the same size in every
-     month (a month spans five or six weeks). */
-  width: min(100%, calc((100vh - var(--around) - 5 * var(--gap)) / 6 * 210 / 297 * 7 + 6 * var(--gap)));
-  width: min(100%, calc((100svh - var(--around) - 5 * var(--gap)) / 6 * 210 / 297 * 7 + 6 * var(--gap)));
+  /* Its section is sized so six weeks of A4 days fit in the height left on
+     screen, so the days are the same size in every month. */
+  width: 100%;
 }
 
 .hp-dayname {
@@ -620,10 +719,34 @@ body {
   display: none;
 }
 
-/* A day: an A4-shaped outline (like a poster); past days are shaded grey. */
+/* The month shown, with the months either side (each with its own title)
+   sitting above and below it, faint until they're scrolled to. They're out of the flow, so they don't
+   make the page any taller; the page's fade at the top and bottom softens
+   them away. */
+.hp-months {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  margin-top: 18px;
+}
+
+/* A month: at full strength when it's the one being looked at, faint
+   otherwise (see HappeningsPage.jsx). */
+/* Each month's title travels with its own grid. */
+.hp-months .hp-month {
+  margin-bottom: 4px;
+}
+
+/* Empty days: the space where a day would be. */
+.hp-blank {
+  aspect-ratio: 3 / 4;
+}
+
+/* A day: a poster-shaped outline; past days are shaded grey. */
 .hp-day {
   position: relative;
-  aspect-ratio: 210 / 297;
+  box-sizing: border-box;
+  aspect-ratio: 3 / 4;
   padding: 0;
   overflow: hidden;
   border: 1px solid rgba(0, 0, 0, 0.16);
@@ -635,7 +758,7 @@ body {
 
 .hp-day.past {
   border-color: rgba(0, 0, 0, 0.22);
-  background: linear-gradient(#bdbdbd, #efefef);
+  background: linear-gradient(#626262, #878787);
 }
 
 .hp-daynum {
@@ -643,15 +766,17 @@ body {
   top: 10px;
   left: 11px;
   font-size: 18px;
-  color: #999;
+  color: #595959;
 }
 
 .hp-day.past .hp-daynum {
   color: #fff;
 }
 
+
 .hp-day.has-event {
-  border-color: transparent;
+  /* A poster fills the day, with nothing around it. */
+  border: 0;
   background: #fff;
   cursor: pointer;
   transition:
@@ -659,9 +784,23 @@ body {
     box-shadow 0.25s ease;
 }
 
-.hp-day.has-event:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+/* The chosen poster stays lifted off the page: a little bigger, with a
+   shadow, and over its neighbours. */
+.hp-day.has-event.chosen {
+  z-index: 1;
+  transform: scale(1.08);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.22),
+    0 0 0 1px #222;
+}
+
+/* On a desktop, hovering one does the same. */
+@media (hover: hover) and (pointer: fine) {
+  .hp-day.has-event:hover {
+    z-index: 1;
+    transform: scale(1.08);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  }
 }
 
 .hp-day.chosen {
@@ -688,12 +827,6 @@ body {
 }
 
 /* The chosen event. */
-.hp-side {
-  position: sticky;
-  top: 96px;
-  align-self: start;
-}
-
 .hp-poster {
   display: block;
   /* Full width, unless that would push the event's details off the bottom
@@ -715,6 +848,26 @@ body {
   line-height: 1.15;
   letter-spacing: -0.01em;
   color: #333;
+}
+
+/* Back to the calendar, before the event's title. */
+.hp-back {
+  margin-right: 0.3em;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hp-back span {
+  display: inline-block;
+  transition: transform 0.25s ease;
+}
+
+.hp-back:hover span {
+  transform: translateX(-3px);
 }
 
 .hp-details .ap-meta {
@@ -765,7 +918,7 @@ body {
     grid-template-columns: minmax(0, 1fr);
     gap: 40px;
     padding: 88px 16px 64px;
-    padding-top: calc(88px + env(safe-area-inset-top, 0px));
+    padding-top: calc(88px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
   }
 
   .ap-profile {
@@ -787,12 +940,17 @@ body {
     margin-left: 0;
   }
 
+  /* The links sit over at the right, away from the logo. */
+  .site-header nav {
+    margin-left: auto;
+  }
+
   /* The calendar above the chosen event, with short day names. */
   .hp-inner {
     grid-template-columns: minmax(0, 1fr);
     gap: 32px;
     padding: 88px 12px 64px;
-    padding-top: calc(88px + env(safe-area-inset-top, 0px));
+    padding-top: calc(88px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
   }
 
   .hp-month {
@@ -805,9 +963,14 @@ body {
     font-size: 24px;
   }
 
-  .hp-grid {
+  .hp-calendar {
+    width: 100%;
     --gap: 5px;
     --around: 200px;
+  }
+
+  .hp-grid {
+    --gap: 5px;
   }
 
   .hp-dayname {
@@ -829,8 +992,30 @@ body {
     font-size: 13px;
   }
 
+  /* One at a time, there being no room for both: the calendar, and in its
+     place the chosen event, which the back arrow closes. */
+  .hp-inner {
+    display: block;
+  }
+
+  .hp-inner.has-event .hp-calendar {
+    display: none;
+  }
+
   .hp-side {
     position: static;
+    width: auto;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .hp-inner.has-event .hp-side {
+    width: auto;
+    padding: 0;
+  }
+
+  .hp-details {
+    width: auto;
   }
 
   .hp-poster {
@@ -850,7 +1035,7 @@ body {
   height: 56px;
   /* The same soft white glow as the links, following the logo's lines
      (drop-shadow traces the transparent image, not its box). */
-  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9));
+  filter: drop-shadow(0 0 3.5px rgba(255, 255, 255, 0.95));
 }
 
 .hint {

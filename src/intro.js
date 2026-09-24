@@ -39,10 +39,12 @@ function recordingsIn(saved) {
 // element: the canvas (for positions); container: where the Record button
 // goes; down/move/up: the ghost pen's handlers, taking events with clientX,
 // clientY and timeStamp.
-// offset: how far (CSS px) the sheet is currently panned to the right, so
+// offset/offsetY: how far (CSS px) the sheet is currently panned right and
+// down, so
 // recordings are made and replayed relative to the sheet, not the screen.
-// clearPaper: wipes all drawings (returns a promise), for the dev panel.
-export function createIntro({ element, container, down, move, up, offset = () => 0, clearPaper }) {
+// clearPaper: wipes all drawings (returns a promise), and pens: { list, get,
+// set } picks the pen to draw with, both for the dev panel.
+export function createIntro({ element, container, down, move, up, offset = () => 0, offsetY = () => 0, clearPaper, pens }) {
   const bank = recordingsIn(introBank)
   // When each was recorded (for the list), where known.
   const recordedAt = introBank?.recordings?.map((r) => r.recordedAt) ?? []
@@ -57,6 +59,7 @@ export function createIntro({ element, container, down, move, up, offset = () =>
   let button = null
   let listButton = null
   let clearButton = null
+  let penButton = null
   let panel = null
   const setButton = (recording) => {
     button.textContent = recording ? '■ Stop' : `● Record intro${bank.length ? ` (${bank.length} saved)` : ''}`
@@ -108,6 +111,22 @@ export function createIntro({ element, container, down, move, up, offset = () =>
     listButton.title = 'View, play or delete the saved intro recordings'
     listButton.addEventListener('click', () => (panel ? closePanel() : openPanel()))
     container.appendChild(listButton)
+
+    if (pens) {
+      // Steps through the pens (calligraphy, pencil, biros).
+      penButton = document.createElement('button')
+      penButton.style.cssText = listButton.style.cssText
+      penButton.style.bottom = 'calc(156px + env(safe-area-inset-bottom, 0px))'
+      penButton.title = 'The pen you draw with'
+      const showPen = () => (penButton.textContent = `✎ ${pens.get()}`)
+      showPen()
+      penButton.addEventListener('click', () => {
+        const next = pens.list[(pens.list.indexOf(pens.get()) + 1) % pens.list.length]
+        pens.set(next)
+        showPen()
+      })
+      container.appendChild(penButton)
+    }
 
     if (clearPaper) {
       clearButton = document.createElement('button')
@@ -248,12 +267,12 @@ export function createIntro({ element, container, down, move, up, offset = () =>
   const toPath = (clientX, clientY) => {
     const r = element.getBoundingClientRect()
     const m = Math.min(r.width, r.height)
-    return [(clientX - r.left - r.width / 2 - offset()) / m, (clientY - r.top - r.height / 2) / m]
+    return [(clientX - r.left - r.width / 2 - offset()) / m, (clientY - r.top - r.height / 2 - offsetY()) / m]
   }
   const fromPath = (x, y) => {
     const r = element.getBoundingClientRect()
     const m = Math.min(r.width, r.height)
-    return [r.left + r.width / 2 + offset() + x * m, r.top + r.height / 2 + y * m]
+    return [r.left + r.width / 2 + offset() + x * m, r.top + r.height / 2 + offsetY() + y * m]
   }
 
   const log = (type, e) => {
@@ -308,10 +327,11 @@ export function createIntro({ element, container, down, move, up, offset = () =>
 
   return {
     // Wraps a DOM pointer listener so it's logged while recording. Live input
-    // always goes through, replay or not.
+    // always goes through, replay or not. A recording is one pen, so only the
+    // first finger of a multi-touch drawing is taken down.
     listen(kind, fn) {
       return (e) => {
-        if (rec) {
+        if (rec && e.isPrimary !== false) {
           if (kind === 'down') log(DOWN, e)
           else if (kind === 'up') log(UP, e)
           else if (kind === 'move') {
@@ -363,6 +383,7 @@ export function createIntro({ element, container, down, move, up, offset = () =>
       button?.remove()
       listButton?.remove()
       clearButton?.remove()
+      penButton?.remove()
       closePanel()
     },
   }

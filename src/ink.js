@@ -16,60 +16,179 @@ import * as THREE from 'three'
 // the region that changed is sent to the GPU, and the shader is told where ink
 // exists at all so it can skip the rest of the page.
 
-// Nib length (CSS px), its angle (degrees; negative tilts it up to the right),
-// the line's width as a fraction of the nib when moving slowly and when fast,
-// and the speed (CSS px/s) at which it reaches its thinnest.
-const NIB_SIZE = 15
-const NIB_ANGLE = -38
-const NIB_WIDTH_SLOW = 1.35
-const NIB_WIDTH_FAST = 0.18
-const NIB_FAST = 900
-// Ink colours: the core, the halftone dots printed over it, and the edge (also
-// used for the streaks that run along each stroke).
-const INK_CORE = '#161d19'
-const INK_DOT = '#2c3b31'
-const INK_EDGE = '#1c3526'
-// Halftone cell size (CSS px) and how visible its dots are (0 = none).
-const DOT_CELL = 4
-const DOT_STRENGTH = 0.25
-// Pooling: the deeper colour ink builds up to where it gathers, and how strongly
-// slow strokes pool (0 = never).
-const INK_POOL_COLOR = '#060a07'
-const POOLING = 1
-// Blotting: how big blots get (fraction of the nib) where the pen touches down,
-// lifts off, or rests in one place (growing over REST_TIME seconds), and the
-// chance of flicking droplets off the end of a fast stroke.
-const BLOT_TOUCH = 0.35
-const BLOT_LIFT = 0.3
-const BLOT_REST = 0.9
-const REST_TIME = 1.5
-const FLICK_CHANCE = 0.5
-// Splatter when a fast stroke stops dead: the pen must have been moving at
-// least SPLAT_SPEED (CSS px/s) and drop below SPLAT_STOP; SPLAT_AMOUNT scales
-// how much ink is thrown (0 = never).
-const SPLAT_SPEED = 900
-const SPLAT_STOP = 60
-const SPLAT_AMOUNT = 1
+// The pens you can draw with. Each has its own nib, colours and behaviour;
+// see PEN_STYLES below for what every setting does. The user's pen is chosen
+// in the dev menu, and every stroke (including other people's, live) is drawn
+// with the pen it was made with.
+export const PENS = ['calligraphy', 'pencil', 'biro blue', 'biro red']
+export const DEFAULT_PEN = 'calligraphy'
+
+// nib: its length (CSS px); angle: how it's held (degrees; negative tilts it
+// up to the right); widthSlow/widthFast: the line's width as a fraction of the
+// nib when moving slowly and when fast, reaching its thinnest at fastAt (CSS
+// px/s). core/dot/edge: the ink's colour, the grain printed over it, and its
+// edge (also the streaks along a stroke). grain: the size of that grain (CSS
+// px) and how strong it is; speckle draws it as scattered dots (pencil on
+// paper) rather than a halftone. alpha: how opaque the ink is. edgeWidth and
+// streaks scale the darker edge and the streaks along a stroke (0 = none).
+// hollow: how much a ballpoint starves down the middle of its line, leaving
+// the paper showing in patches (0 = never).
+// poolColor/pooling: the deeper colour ink gathers into, and how readily.
+// blotTouch/blotLift/blotRest: how big blots get (fraction of the nib) where
+// the pen touches down, lifts off, or rests for restTime seconds;
+// flickChance: the chance of flicking droplets off a fast stroke. splat*: a
+// fast stroke stopping dead throws ink (speed thresholds in CSS px/s; amount
+// 0 = never). bleed*: how far and how strongly the ink creeps into the paper.
+const PEN_STYLES = {
+  calligraphy: {
+    nib: 15,
+    angle: -38,
+    widthSlow: 1.35,
+    widthFast: 0.18,
+    fastAt: 900,
+    core: '#161d19',
+    dot: '#2c3b31',
+    edge: '#1c3526',
+    grainSize: 4,
+    grainStrength: 0.25,
+    speckle: false,
+    alpha: 1,
+    edgeWidth: 1,
+    streaks: 1,
+    hollow: 0,
+    poolColor: '#060a07',
+    pooling: 1,
+    blotTouch: 0.35,
+    blotLift: 0.3,
+    blotRest: 0.9,
+    restTime: 1.5,
+    flickChance: 0.5,
+    splatSpeed: 900,
+    splatStop: 60,
+    splatAmount: 1,
+    bleed: 0.3,
+    bleedSpread: 0.1,
+    bleedColor: '#7d9486',
+    bleedLayerAlpha: 0.035,
+  },
+  // Graphite: a small round tip, grainy and grey, that hardly blots or bleeds
+  // and goes darker (not thicker) when pressed slowly along.
+  pencil: {
+    nib: 5.5,
+    angle: -38,
+    // The same width however fast it moves.
+    widthSlow: 1,
+    widthFast: 1,
+    fastAt: 1200,
+    core: '#4a4a4c',
+    dot: '#87878c',
+    edge: '#5f6064',
+    grainSize: 3,
+    grainStrength: 0.85,
+    speckle: true,
+    alpha: 0.72,
+    edgeWidth: 0.5,
+    streaks: 1.4,
+    hollow: 0,
+    poolColor: '#3a3a3d',
+    pooling: 0.35,
+    blotTouch: 0.12,
+    blotLift: 0.1,
+    blotRest: 0.22,
+    restTime: 2.5,
+    flickChance: 0,
+    splatSpeed: 1200,
+    splatStop: 40,
+    splatAmount: 0,
+    bleed: 0.05,
+    bleedSpread: 0.04,
+    bleedColor: '#9b9b9f',
+    bleedLayerAlpha: 0.02,
+  },
+  // Ballpoint: an even, narrow line that pools where it slows and skips into
+  // little blobs, with barely any spread into the paper.
+  'biro blue': {
+    nib: 4.6,
+    angle: -38,
+    widthSlow: 1,
+    widthFast: 0.7,
+    fastAt: 1400,
+    core: '#23379b',
+    dot: '#4055c4',
+    edge: '#182a7d',
+    grainSize: 3,
+    grainStrength: 0.12,
+    speckle: false,
+    alpha: 0.95,
+    edgeWidth: 0.6,
+    streaks: 0.5,
+    hollow: 0.75,
+    poolColor: '#101d63',
+    pooling: 1.6,
+    blotTouch: 0.3,
+    blotLift: 0.28,
+    blotRest: 0.75,
+    restTime: 1.8,
+    flickChance: 0.15,
+    splatSpeed: 1100,
+    splatStop: 50,
+    splatAmount: 0.25,
+    bleed: 0.08,
+    bleedSpread: 0.05,
+    bleedColor: '#8e9ad6',
+    bleedLayerAlpha: 0.025,
+  },
+  'biro red': {
+    nib: 4.6,
+    angle: -38,
+    widthSlow: 1,
+    widthFast: 0.7,
+    fastAt: 1400,
+    core: '#b3242a',
+    dot: '#cf4a4a',
+    edge: '#8e181f',
+    grainSize: 3,
+    grainStrength: 0.12,
+    speckle: false,
+    alpha: 0.95,
+    edgeWidth: 0.6,
+    streaks: 0.5,
+    hollow: 0.75,
+    poolColor: '#6d0f14',
+    pooling: 1.6,
+    blotTouch: 0.3,
+    blotLift: 0.28,
+    blotRest: 0.75,
+    restTime: 1.8,
+    flickChance: 0.15,
+    splatSpeed: 1100,
+    splatStop: 50,
+    splatAmount: 0.25,
+    bleed: 0.08,
+    bleedSpread: 0.05,
+    bleedColor: '#e0919a',
+    bleedLayerAlpha: 0.025,
+  },
+}
+
 // Lifespan: seconds each stroke stays at full strength from when it's drawn (0
 // = forever), then how many seconds it takes to fade away.
 export const INK_LIFESPAN = 600
 export const INK_FADE = 3
-// Bleeding: after ink lands it slowly spreads into the paper as a pale, diluted
-// halo. BLEED scales it (0 = off); BLEED_SPREAD is how far it creeps (fraction
-// of the nib), over BLEED_TIME seconds (fast at first, then slowing); the halo
-// is built up in faint layers of BLEED_COLOR every BLEED_STEP seconds, each part
-// of a stroke on its own schedule; BLEED_LAYER_ALPHA is how much it builds up
-// per 0.2 s.
-const BLEED = 0.3
-const BLEED_SPREAD = 0.1
+// Bleeding: after ink lands it slowly spreads into the paper as a pale,
+// diluted halo (how far and how strongly is the pen's; see PEN_STYLES). It
+// creeps over BLEED_TIME seconds, fast at first then slowing, in faint layers
+// laid every BLEED_STEP seconds, each part of a stroke on its own schedule.
 const BLEED_TIME = 4
 const BLEED_STEP = 0.1
-const BLEED_COLOR = '#7d9486'
-const BLEED_LAYER_ALPHA = 0.035
 
 // The stroke is remembered for bleeding in groups of this many seconds'
 // drawing, each spreading on its own schedule.
 const BLEED_GROUP = 0.15
+// A stroke drawn before this page opened (someone else's, replayed from the
+// last few minutes) has already bled: rather than laying a layer every
+// BLEED_STEP from nothing, its halo is caught up in this many layers at once.
+const BLEED_CATCHUP = 5
 // How far (CSS px) around the ink its stroke direction is recorded: past the
 // soft edge the shader gives ink, so every inked pixel on screen has one.
 const DIR_REACH = 6
@@ -168,14 +287,21 @@ export function createInk() {
   let ageReach = 0
 
   let px = 1
+  // The pen's size relative to the sizes in PEN_STYLES (see setPenScale).
+  let penScale = 1
   // Where the logo sits on the canvas (see resize).
   let logoAnchor = null
-  let patternTile = null
-  let patterns = new WeakMap()
-  // The core's halftone fill, for the context being drawn on.
+  // The pen being drawn with (see select and setPenStyle), and each pen's
+  // grain, as a tile and as a fill for the canvas it's painted on.
+  let pen = PEN_STYLES[DEFAULT_PEN]
+  let penName = DEFAULT_PEN
+  const patternTiles = new Map()
+  let patterns = new Map()
   const corePattern = () => {
-    let p = patterns.get(ctx)
-    if (!p) patterns.set(ctx, (p = ctx.createPattern(patternTile, 'repeat')))
+    let byCtx = patterns.get(penName)
+    if (!byCtx) patterns.set(penName, (byCtx = new WeakMap()))
+    let p = byCtx.get(ctx)
+    if (!p) byCtx.set(ctx, (p = ctx.createPattern(patternTiles.get(penName), 'repeat')))
     return p
   }
   // Changes are tracked in TILE-pixel tiles, so only the parts actually painted
@@ -231,22 +357,35 @@ export function createInk() {
     for (const r of [...records, ...drawing()]) addBounds(r.x0, r.y0, r.x1, r.y1)
   }
 
+  // Each pen's grain: a halftone dot, or scattered specks for a pencil.
   const makePattern = () => {
-    const cell = Math.max(2, Math.round(DOT_CELL * px))
-    const tile = document.createElement('canvas')
-    tile.width = tile.height = cell
-    // In CPU memory like the ink canvases it fills: a GPU canvas here would be
-    // read back from the GPU every frame, stalling it until the frame is done.
-    const t = tile.getContext('2d', { willReadFrequently: true })
-    t.fillStyle = INK_CORE
-    t.fillRect(0, 0, cell, cell)
-    t.fillStyle = INK_DOT
-    t.globalAlpha = DOT_STRENGTH
-    t.beginPath()
-    t.arc(cell / 2, cell / 2, cell * 0.24, 0, Math.PI * 2)
-    t.fill()
-    patternTile = tile
-    patterns = new WeakMap()
+    patternTiles.clear()
+    patterns = new Map()
+    for (const [name, style] of Object.entries(PEN_STYLES)) {
+      const cell = Math.max(2, Math.round(style.grainSize * px))
+      const tile = document.createElement('canvas')
+      tile.width = tile.height = cell
+      // In CPU memory like the ink canvases it fills: a GPU canvas here would
+      // be read back from the GPU every frame, stalling it until the frame is
+      // done.
+      const t = tile.getContext('2d', { willReadFrequently: true })
+      t.fillStyle = style.core
+      t.fillRect(0, 0, cell, cell)
+      t.fillStyle = style.dot
+      if (style.speckle) {
+        // Paper grain: specks left unmarked, so the stroke looks rubbed on.
+        for (let i = 0; i < cell * cell * 0.5; i++) {
+          t.globalAlpha = style.grainStrength * (0.3 + Math.random() * 0.7)
+          t.fillRect(Math.floor(Math.random() * cell), Math.floor(Math.random() * cell), 1, 1)
+        }
+      } else {
+        t.globalAlpha = style.grainStrength
+        t.beginPath()
+        t.arc(cell / 2, cell / 2, cell * 0.24, 0, Math.PI * 2)
+        t.fill()
+      }
+      patternTiles.set(name, tile)
+    }
   }
 
   // A pen's stroke state, in canvas pixels. `streaks` are fixed positions
@@ -267,6 +406,10 @@ export function createInk() {
     splatted: true,
     dirX: 1,
     dirY: 0,
+    // How far the pen has travelled (canvas px) and where its skipping starts,
+    // for a ballpoint's starved middle (see `hollow`).
+    dist: 0,
+    hollowPhase: 0,
     streaks: [],
     rest: 0,
     // Recent pointer positions (with the line width at each) that the stroke's
@@ -283,11 +426,13 @@ export function createInk() {
   let penState = null
   const select = (id) => {
     penState = pens.get(id)
-    if (!penState) pens.set(id, (penState = { stroke: makeStroke(), current: null, layer: null }))
+    if (!penState) pens.set(id, (penState = { stroke: makeStroke(), current: null, layer: null, pen: DEFAULT_PEN }))
     if (!penState.layer) penState.layer = newLayer()
     stroke = penState.stroke
     current = penState.current
     ctx = penState.layer
+    penName = PEN_STYLES[penState.pen] ? penState.pen : DEFAULT_PEN
+    pen = PEN_STYLES[penName]
   }
   // Records of strokes being drawn by any pen.
   const drawing = () => [...pens.values()].map((p) => p.current).filter(Boolean)
@@ -373,7 +518,7 @@ export function createInk() {
     const bucket = Math.floor(now / BLEED_GROUP)
     let g = current.groups[current.groups.length - 1]
     if (!g || g.bucket !== bucket) {
-      g = { bucket, t: now, line: [], blots: [], half: 0, n: 0, next: now + BLEED_STEP, wobble: 0.9 + Math.random() * 0.2, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }
+      g = { bucket, t: now, catchUp: current.aged, line: [], blots: [], half: 0, n: 0, next: now + BLEED_STEP, wobble: 0.9 + Math.random() * 0.2, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }
       current.groups.push(g)
     }
     return g
@@ -385,7 +530,7 @@ export function createInk() {
     g.y1 = Math.max(g.y1, y1)
   }
   const rememberStep = (x0, y0, x1, y1, half, bx0, by0, bx1, by1) => {
-    if (!current || BLEED <= 0) return
+    if (!current || pen.bleed <= 0) return
     const g = groupFor()
     const line = g.line
     const n = line.length
@@ -398,7 +543,7 @@ export function createInk() {
     growGroup(g, bx0, by0, bx1, by1)
   }
   const rememberBlot = (x, y, r, bx0, by0, bx1, by1) => {
-    if (!current || BLEED <= 0) return
+    if (!current || pen.bleed <= 0) return
     const g = groupFor()
     g.blots.push(x, y, r)
     growGroup(g, bx0, by0, bx1, by1)
@@ -431,8 +576,8 @@ export function createInk() {
   // parallelogram. Core goes on top; the red edge is tucked behind existing ink
   // ('destination-over') so it never paints over the core of the same stroke.
   const stamp = (x0, y0, x1, y1, width) => {
-    const ang = ((NIB_ANGLE + (Math.random() - 0.5) * 6) * Math.PI) / 180
-    const half = (NIB_SIZE / 2) * px * width * (1 + (Math.random() - 0.5) * 0.16)
+    const ang = ((pen.angle + (Math.random() - 0.5) * 6) * Math.PI) / 180
+    const half = (nibOf() / 2) * width * (1 + (Math.random() - 0.5) * 0.16)
     const nx = Math.cos(ang) * half
     const ny = Math.sin(ang) * half
     const quad = (k) => quadPath(ctx, x0, y0, x1, y1, nx, ny, k)
@@ -444,6 +589,7 @@ export function createInk() {
     }
 
     ctx.globalCompositeOperation = 'source-over'
+    ctx.globalAlpha = pen.alpha
     ctx.fillStyle = corePattern()
     ctx.strokeStyle = corePattern()
     quad(0.72)
@@ -451,21 +597,22 @@ export function createInk() {
     ctx.lineWidth = 1.1 * px
     hair()
     ctx.stroke()
+    ctx.globalAlpha = 1
 
     // Slow strokes pool: a little deeper colour builds up with each overlapping step.
     const slow = Math.max(0, 1 - stroke.speed / 500)
-    if (POOLING > 0 && slow > 0) {
-      ctx.globalAlpha = 0.045 * slow * POOLING
-      ctx.fillStyle = INK_POOL_COLOR
+    if (pen.pooling > 0 && slow > 0) {
+      ctx.globalAlpha = 0.045 * slow * pen.pooling
+      ctx.fillStyle = pen.poolColor
       quad(0.6)
       ctx.fill()
     }
 
     // Streaks along the stroke at fixed offsets across the nib.
-    ctx.strokeStyle = INK_EDGE
+    ctx.strokeStyle = pen.edge
     ctx.lineCap = 'round'
     for (const [k, alpha] of stroke.streaks) {
-      ctx.globalAlpha = alpha
+      ctx.globalAlpha = Math.min(1, alpha * pen.streaks)
       ctx.lineWidth = 0.9 * px
       ctx.beginPath()
       ctx.moveTo(x0 + nx * k * 0.72, y0 + ny * k * 0.72)
@@ -475,17 +622,43 @@ export function createInk() {
     ctx.globalAlpha = 1
 
     ctx.globalCompositeOperation = 'destination-over'
-    ctx.fillStyle = INK_EDGE
-    ctx.strokeStyle = INK_EDGE
+    ctx.globalAlpha = pen.edgeWidth > 0 ? pen.alpha : 0
+    ctx.fillStyle = pen.edge
+    ctx.strokeStyle = pen.edge
     ctx.lineJoin = 'round'
-    ctx.lineWidth = 2 * px
+    ctx.lineWidth = 2 * px * pen.edgeWidth
     quad(1)
     ctx.fill()
     ctx.stroke()
-    ctx.lineWidth = 2.6 * px
+    ctx.lineWidth = 2.6 * px * pen.edgeWidth
     hair()
     ctx.stroke()
+    ctx.globalAlpha = 1
     ctx.globalCompositeOperation = 'source-over'
+
+    // A ballpoint starves: the ball leaves the middle of its track bare in
+    // patches, more so as it speeds up. Erased (not painted over) so the paper
+    // shows, after the edge, which would otherwise fill it back in.
+    const travelled = Math.hypot(x1 - x0, y1 - y0)
+    stroke.dist += travelled
+    if (pen.hollow > 0) {
+      const d = stroke.dist / px
+      // Two slow waves, so the gaps come in runs rather than flickering.
+      const wave = Math.sin(d / 23 + stroke.hollowPhase) + 0.7 * Math.sin(d / 7.3 + stroke.hollowPhase * 2.3)
+      const gap = Math.max(0, wave - 0.35) / 1.35
+      if (gap > 0) {
+        ctx.globalCompositeOperation = 'destination-out'
+        ctx.globalAlpha = Math.min(0.92, pen.hollow * gap * (0.55 + 0.45 * Math.min(1, stroke.speed / 700)))
+        ctx.lineCap = 'round'
+        ctx.lineWidth = Math.max(0.6 * px, half * 0.5)
+        ctx.beginPath()
+        ctx.moveTo(x0 - ny * 0.12, y0 + nx * 0.12)
+        ctx.lineTo(x1 - ny * 0.12, y1 + nx * 0.12)
+        ctx.stroke()
+        ctx.globalAlpha = 1
+        ctx.globalCompositeOperation = 'source-over'
+      }
+    }
 
     // (Its age and direction are recorded once per stretch of the stroke; see
     // drawCurve.)
@@ -505,23 +678,27 @@ export function createInk() {
     const phases = [Math.random() * 6.3, Math.random() * 6.3, Math.random() * 6.3]
     const shape = (k) => blotPath(ctx, x, y, r, k, phases)
     ctx.globalCompositeOperation = 'source-over'
+    ctx.globalAlpha = pen.alpha
     ctx.fillStyle = corePattern()
     shape(1)
     ctx.fill()
-    if (POOLING > 0) {
-      ctx.globalAlpha = deepen * POOLING
-      ctx.fillStyle = INK_POOL_COLOR
+    ctx.globalAlpha = 1
+    if (pen.pooling > 0) {
+      ctx.globalAlpha = deepen * pen.pooling
+      ctx.fillStyle = pen.poolColor
       shape(0.8)
       ctx.fill()
       ctx.globalAlpha = 1
     }
     ctx.globalCompositeOperation = 'destination-over'
-    ctx.fillStyle = INK_EDGE
+    ctx.globalAlpha = pen.edgeWidth > 0 ? pen.alpha : 0
+    ctx.fillStyle = pen.edge
     shape(1)
-    ctx.lineWidth = 2.4 * px
-    ctx.strokeStyle = INK_EDGE
+    ctx.lineWidth = 2.4 * px * pen.edgeWidth
+    ctx.strokeStyle = pen.edge
     ctx.stroke()
     ctx.fill()
+    ctx.globalAlpha = 1
     ctx.globalCompositeOperation = 'source-over'
     stampAge((c) => blotPath(c, x, y, r, 1, phases), 2.4 * px)
     const pad = r * 1.3 + 4 * px + ageReach
@@ -529,7 +706,88 @@ export function createInk() {
     rememberBlot(x, y, r, x - pad, y - pad, x + pad, y + pad)
   }
 
-  const nib = () => NIB_SIZE * px
+  // The nib's length in canvas px, for the pen in hand or another style.
+  const nibOf = (style = pen) => style.nib * penScale * px
+  const nib = () => nibOf()
+  // The speed (CSS px/s) a pen thins out at, scaled with it: on a smaller
+  // sheet the same gesture covers fewer px a second, so the line would
+  // otherwise never thin. (Splattering isn't scaled: how hard the hand
+  // actually flicks is what throws ink, whatever the sheet's size.)
+  const fastAt = () => pen.fastAt * penScale
+
+  // One layer of a group's halo: its path widened by how far the ink has crept
+  // by `age`, laid faintly behind the ink already there. `period` is how long
+  // the layer stands in for, which sets how dark it is.
+  const bleedLayer = (rec, ink, g, age, period) => {
+    const spread = ink.bleedSpread * ink.bleed * nibOf(ink) * (1 - Math.exp((-3 * age) / BLEED_TIME))
+    if (spread < 0.3 * px) return
+    const grow = spread * g.wobble
+
+    ctx.globalCompositeOperation = 'destination-over'
+    ctx.globalAlpha = 1 - (1 - ink.bleedLayerAlpha) ** (period / 0.2)
+    ctx.fillStyle = ctx.strokeStyle = ink.bleedColor
+    ctx.lineJoin = ctx.lineCap = 'round'
+    ctx.lineWidth = 2 * (g.half + grow)
+    traceLine(ctx, g)
+    ctx.stroke()
+    if (g.blots.length) {
+      traceBlots(ctx, g, grow)
+      ctx.fill()
+    }
+    ctx.globalAlpha = 1
+    ctx.globalCompositeOperation = 'source-over'
+
+    // The halo takes its stroke's age, so it fades out with it: around it
+    // only where nothing has an age yet, and where the halo itself spreads
+    // onto bare paper even over the margin an older stroke nearby claimed;
+    // under older ink (masked out using the finished ink) ages are left alone.
+    const ageStyle = `rgb(${rec.born},0,0)`
+    ageCtx.globalCompositeOperation = 'destination-over'
+    ageCtx.fillStyle = ageCtx.strokeStyle = ageStyle
+    ageCtx.lineJoin = ageCtx.lineCap = 'round'
+    ageCtx.lineWidth = 2 * (g.half + grow + ageReach) + 4
+    traceLine(ageCtx, g)
+    ageCtx.stroke()
+    if (g.blots.length) {
+      traceBlots(ageCtx, g, grow + ageReach + 2)
+      ageCtx.fill()
+    }
+    ageCtx.globalCompositeOperation = 'source-over'
+    const hp = g.half + grow + 4 * px
+    const rx = Math.max(0, Math.floor(g.x0 - hp))
+    const ry = Math.max(0, Math.floor(g.y0 - hp))
+    const rw = Math.min(canvas.width, Math.ceil(g.x1 + hp)) - rx
+    const rh = Math.min(canvas.height, Math.ceil(g.y1 + hp)) - ry
+    if (rw > 0 && rh > 0) {
+      maskCtx.clearRect(rx, ry, rw, rh)
+      maskCtx.globalCompositeOperation = 'source-over'
+      maskCtx.fillStyle = maskCtx.strokeStyle = ageStyle
+      maskCtx.lineJoin = maskCtx.lineCap = 'round'
+      maskCtx.lineWidth = 2 * (g.half + grow)
+      traceLine(maskCtx, g)
+      maskCtx.stroke()
+      if (g.blots.length) {
+        traceBlots(maskCtx, g, grow)
+        maskCtx.fill()
+      }
+      maskCtx.globalCompositeOperation = 'destination-out'
+      maskCtx.drawImage(canvas, rx, ry, rw, rh, rx, ry, rw, rh)
+      maskCtx.globalCompositeOperation = 'source-over'
+      ageCtx.drawImage(maskCtx.canvas, rx / 2, ry / 2, rw / 2, rh / 2, rx, ry, rw, rh)
+    }
+
+    const pad = g.half + grow + ageReach + 2
+    const bx0 = g.x0 - pad
+    const by0 = g.y0 - pad
+    const bx1 = g.x1 + pad
+    const by1 = g.y1 + pad
+    markUpload(bx0, by0, bx1, by1, rec)
+    addBounds(bx0, by0, bx1, by1)
+    rec.x0 = Math.min(rec.x0, bx0)
+    rec.y0 = Math.min(rec.y0, by0)
+    rec.x1 = Math.max(rec.x1, bx1)
+    rec.y1 = Math.max(rec.y1, by1)
+  }
 
   // Spreads still-wet ink a little further into the paper: each group of the
   // stroke is redrawn widened by how far its ink has crept by now, as a faint
@@ -539,8 +797,22 @@ export function createInk() {
     const live = drawing()
     for (const rec of [...wet, ...live]) {
       ctx = rec.layer ?? baseCtx
+      // Bleeds like the pen it was drawn with.
+      const ink = PEN_STYLES[rec.pen] ?? PEN_STYLES[DEFAULT_PEN]
       let stillWet = false
       for (const g of rec.groups) {
+        // Drawn before this page opened: the bleeding it has already done is
+        // caught up in a few layers at once, rather than one every BLEED_STEP
+        // (which would be both slow to appear and, with a sheet's worth of
+        // strokes arriving together, a lot of work every frame).
+        if (g.catchUp > 0) {
+          const done = Math.min(g.catchUp, BLEED_TIME)
+          g.catchUp = 0
+          const layers = Math.max(1, Math.min(BLEED_CATCHUP, Math.round(done / BLEED_STEP)))
+          for (let i = 1; i <= layers; i++) bleedLayer(rec, ink, g, (done * i) / layers, done / layers)
+          g.t = now - done
+          g.next = now + BLEED_STEP
+        }
         const age = now - g.t
         if (age >= BLEED_TIME) continue
         stillWet = true
@@ -548,74 +820,7 @@ export function createInk() {
         // the halo creeps smoothly and the work is spread across frames.
         if (now < g.next) continue
         g.next = Math.max(g.next + BLEED_STEP, now)
-        const spread = BLEED_SPREAD * BLEED * nib() * (1 - Math.exp((-3 * age) / BLEED_TIME))
-        if (spread < 0.3 * px) continue
-        const grow = spread * g.wobble
-
-        ctx.globalCompositeOperation = 'destination-over'
-        ctx.globalAlpha = 1 - (1 - BLEED_LAYER_ALPHA) ** (BLEED_STEP / 0.2)
-        ctx.fillStyle = ctx.strokeStyle = BLEED_COLOR
-        ctx.lineJoin = ctx.lineCap = 'round'
-        ctx.lineWidth = 2 * (g.half + grow)
-        traceLine(ctx, g)
-        ctx.stroke()
-        if (g.blots.length) {
-          traceBlots(ctx, g, grow)
-          ctx.fill()
-        }
-        ctx.globalAlpha = 1
-        ctx.globalCompositeOperation = 'source-over'
-
-        // The halo takes its stroke's age, so it fades out with it: around it
-        // only where nothing has an age yet, and where the halo itself spreads
-        // onto bare paper even over the margin an older stroke nearby claimed;
-        // under older ink (masked out using the finished ink) ages are left alone.
-        const ageStyle = `rgb(${rec.born},0,0)`
-        ageCtx.globalCompositeOperation = 'destination-over'
-        ageCtx.fillStyle = ageCtx.strokeStyle = ageStyle
-        ageCtx.lineJoin = ageCtx.lineCap = 'round'
-        ageCtx.lineWidth = 2 * (g.half + grow + ageReach) + 4
-        traceLine(ageCtx, g)
-        ageCtx.stroke()
-        if (g.blots.length) {
-          traceBlots(ageCtx, g, grow + ageReach + 2)
-          ageCtx.fill()
-        }
-        ageCtx.globalCompositeOperation = 'source-over'
-        const hp = g.half + grow + 4 * px
-        const rx = Math.max(0, Math.floor(g.x0 - hp))
-        const ry = Math.max(0, Math.floor(g.y0 - hp))
-        const rw = Math.min(canvas.width, Math.ceil(g.x1 + hp)) - rx
-        const rh = Math.min(canvas.height, Math.ceil(g.y1 + hp)) - ry
-        if (rw > 0 && rh > 0) {
-          maskCtx.clearRect(rx, ry, rw, rh)
-          maskCtx.globalCompositeOperation = 'source-over'
-          maskCtx.fillStyle = maskCtx.strokeStyle = ageStyle
-          maskCtx.lineJoin = maskCtx.lineCap = 'round'
-          maskCtx.lineWidth = 2 * (g.half + grow)
-          traceLine(maskCtx, g)
-          maskCtx.stroke()
-          if (g.blots.length) {
-            traceBlots(maskCtx, g, grow)
-            maskCtx.fill()
-          }
-          maskCtx.globalCompositeOperation = 'destination-out'
-          maskCtx.drawImage(canvas, rx, ry, rw, rh, rx, ry, rw, rh)
-          maskCtx.globalCompositeOperation = 'source-over'
-          ageCtx.drawImage(maskCtx.canvas, rx / 2, ry / 2, rw / 2, rh / 2, rx, ry, rw, rh)
-        }
-
-        const pad = g.half + grow + ageReach + 2
-        const bx0 = g.x0 - pad
-        const by0 = g.y0 - pad
-        const bx1 = g.x1 + pad
-        const by1 = g.y1 + pad
-        markUpload(bx0, by0, bx1, by1, rec)
-        addBounds(bx0, by0, bx1, by1)
-        rec.x0 = Math.min(rec.x0, bx0)
-        rec.y0 = Math.min(rec.y0, by0)
-        rec.x1 = Math.max(rec.x1, bx1)
-        rec.y1 = Math.max(rec.y1, by1)
+        bleedLayer(rec, ink, g, age, BLEED_STEP)
       }
       // Fully bled: the remembered path is no longer needed.
       if (!stillWet && !live.includes(rec)) {
@@ -694,8 +899,8 @@ export function createInk() {
   // cone ahead of the pen, some drops trailing a short tail back toward it.
   const splat = () => {
     stroke.splatted = true
-    if (SPLAT_AMOUNT <= 0) return
-    const s = Math.min(2, Math.max(0.6, 0.6 + (stroke.peak - SPLAT_SPEED) / SPLAT_SPEED)) * SPLAT_AMOUNT
+    if (pen.splatAmount <= 0) return
+    const s = Math.min(2, Math.max(0.6, 0.6 + (stroke.peak - pen.splatSpeed) / pen.splatSpeed)) * pen.splatAmount
     const heading = Math.atan2(stroke.dirY, stroke.dirX)
     // The nib surges as it stops.
     blot(stroke.sx + stroke.dirX * nib() * 0.2, stroke.sy + stroke.dirY * nib() * 0.2, nib() * 0.32, 0.3)
@@ -776,14 +981,14 @@ export function createInk() {
     // The pen has paused: bring the line all the way to it.
     if (idle > 30) drawTail()
     if (idle > 45 && !stroke.splatted) {
-      if (stroke.peak * Math.exp(-idle / 150) > SPLAT_SPEED * 0.7) splat()
+      if (stroke.peak * Math.exp(-idle / 150) > pen.splatSpeed * 0.7) splat()
       else stroke.splatted = true
     }
     if (idle < 90) return
-    if (stroke.rest >= REST_TIME) return
-    stroke.rest = Math.min(REST_TIME, stroke.rest + dt)
-    const grow = stroke.rest / REST_TIME
-    blot(stroke.sx, stroke.sy, nib() * BLOT_REST * (0.35 + 0.65 * Math.sqrt(grow)), 0.04)
+    if (stroke.rest >= pen.restTime) return
+    stroke.rest = Math.min(pen.restTime, stroke.rest + dt)
+    const grow = stroke.rest / pen.restTime
+    blot(stroke.sx, stroke.sy, nib() * pen.blotRest * (0.35 + 0.65 * Math.sqrt(grow)), 0.04)
   }
 
   // The selected pen lifts off.
@@ -791,8 +996,8 @@ export function createInk() {
     if (!stroke.active) return
     drawTail()
     // Lifting the pen leaves a blot, and a quick flick can throw droplets.
-    if (Math.random() < 0.6) blot(stroke.sx, stroke.sy, nib() * BLOT_LIFT * (0.7 + Math.random() * 0.6), 0.25)
-    if (stroke.speed > 700 && Math.random() < FLICK_CHANCE) {
+    if (Math.random() < 0.6) blot(stroke.sx, stroke.sy, nib() * pen.blotLift * (0.7 + Math.random() * 0.6), 0.25)
+    if (stroke.speed > 700 && Math.random() < pen.flickChance) {
       const drops = 1 + Math.floor(Math.random() * 3)
       for (let i = 0; i < drops; i++) {
         const along = nib() * (1.5 + Math.random() * 3)
@@ -807,13 +1012,30 @@ export function createInk() {
     }
     stroke.active = false
     penState.lastUp = performance.now()
-    // Merge the stroke into the finished ink, tile by tile, and clear its layer.
+    // Merge the stroke into the finished ink and clear its layer. In one go
+    // over everything it touched: a copy between two canvases costs about the
+    // same whatever area it covers (the whole source is taken each time), so a
+    // copy per tile would be many times slower on a long stroke.
     if (current) {
+      let tx0 = Infinity
+      let ty0 = Infinity
+      let tx1 = -Infinity
+      let ty1 = -Infinity
       for (const k of current.tiles) {
-        const x = (k % cols) * TILE
-        const y = Math.floor(k / cols) * TILE
-        baseCtx.drawImage(ctx.canvas, x, y, TILE, TILE, x, y, TILE, TILE)
-        ctx.clearRect(x, y, TILE, TILE)
+        const tx = k % cols
+        const ty = Math.floor(k / cols)
+        if (tx < tx0) tx0 = tx
+        if (ty < ty0) ty0 = ty
+        if (tx > tx1) tx1 = tx
+        if (ty > ty1) ty1 = ty
+      }
+      if (tx1 >= tx0) {
+        const x = tx0 * TILE
+        const y = ty0 * TILE
+        const w = Math.min(canvas.width, (tx1 + 1) * TILE) - x
+        const h = Math.min(canvas.height, (ty1 + 1) * TILE) - y
+        baseCtx.drawImage(ctx.canvas, x, y, w, h, x, y, w, h)
+        ctx.clearRect(x, y, w, h)
       }
       current.layer = null
     }
@@ -838,14 +1060,14 @@ export function createInk() {
 
     // Match the sheet's size, keeping any ink already painted. Ink stays where
     // it was relative to the logo, scaled with it, so it's never stretched and
-    // stays on the logo. anchor: where the logo's centre is across the canvas
-    // (cx, px) and the length it's sized from (base, px); by default the
-    // middle and the shorter side.
-    resize(w, h, pixelsPerCss, anchor = { cx: w / 2, base: Math.min(w, h) }) {
+    // stays on the logo. anchor: where the logo's centre is on the canvas (cx,
+    // cy, px) and the length it's sized from (base, px); by default the middle
+    // and the shorter side.
+    resize(w, h, pixelsPerCss, anchor = { cx: w / 2, cy: h / 2, base: Math.min(w, h) }) {
       px = pixelsPerCss
       const prev = logoAnchor
       logoAnchor = anchor
-      if (canvas.width === w && canvas.height === h && prev && Math.abs(prev.cx - anchor.cx) < 0.5) return
+      if (canvas.width === w && canvas.height === h && prev && Math.abs(prev.cx - anchor.cx) < 0.5 && Math.abs(prev.cy - anchor.cy) < 0.5) return
       // Fold any strokes in progress into the finished ink first.
       for (const p of pens.values()) {
         if (!p.layer) continue
@@ -854,10 +1076,10 @@ export function createInk() {
         if (p.current) p.current.layer = null
       }
       // Old canvas px → new: p * k + (ox, oy), keeping the logo's centre put.
-      const from = prev ?? { cx: canvas.width / 2, base: Math.min(canvas.width, canvas.height) }
+      const from = prev ?? { cx: canvas.width / 2, cy: canvas.height / 2, base: Math.min(canvas.width, canvas.height) }
       const k = anchor.base / from.base
       const ox = anchor.cx - from.cx * k
-      const oy = (h - canvas.height * k) / 2
+      const oy = anchor.cy - from.cy * k
       const copy = (src) => {
         if (src.width <= 1) return null
         const c = document.createElement('canvas')
@@ -964,11 +1186,28 @@ export function createInk() {
       for (const t of [texture, dirTexture, ageTexture]) t.needsUpdate = true
     },
 
+    // The pen a given pen id draws with, from its next stroke on (see PENS).
+    setPenStyle(id, name) {
+      if (!PEN_STYLES[name]) return
+      select(id)
+      penState.pen = name
+      penName = name
+      pen = PEN_STYLES[name]
+    },
+
     // Scene time in seconds; call once per frame before drawing.
     setTime(t) {
       now = t + HEADROOM
       if (ageStepAt(t) > 250) rebase(ageStepAt(t) - 125)
       uniforms.inkNowStep.value = t / AGE_STEP - ageBase
+    },
+
+    // How big the pen is against the sizes in PEN_STYLES (1 = as given). The
+    // sheet and its logo scale with the screen's shorter side, so a pen fixed
+    // in CSS px would draw a line half again as heavy, against the drawing, on
+    // a phone as on a desktop; the scene scales it with the sheet.
+    setPenScale(s) {
+      penScale = s
     },
 
     // How far (CSS px) the shader softens ink edges, so ages cover that too.
@@ -992,19 +1231,21 @@ export function createInk() {
         sx: x,
         sy: y,
         t,
-        width: NIB_WIDTH_SLOW * 0.9,
+        width: pen.widthSlow * 0.9,
         speed: 0,
         peak: 0,
         peakT: t,
         splatted: true,
+        dist: 0,
+        hollowPhase: Math.random() * 100,
         streaks,
         rest: 0,
-        pts: [{ x, y, w: NIB_WIDTH_SLOW * 0.9 }],
+        pts: [{ x, y, w: pen.widthSlow * 0.9 }],
         tailDrawn: true,
       })
-      current = penState.current = { x0: x, y0: y, x1: x, y1: y, groups: [], tiles: new Set(), layer: ctx, born: Math.max(0, ageStepAt(now - Math.min(age, HEADROOM))) }
+      current = penState.current = { x0: x, y0: y, x1: x, y1: y, groups: [], tiles: new Set(), layer: ctx, born: Math.max(0, ageStepAt(now - Math.min(age, HEADROOM))), pen: penName, aged: age }
       // The nib touching down leaves a small blot.
-      blot(x, y, nib() * BLOT_TOUCH * (0.8 + Math.random() * 0.4), 0.2)
+      blot(x, y, nib() * pen.blotTouch * (0.8 + Math.random() * 0.4), 0.2)
       const half = stamp(x, y, x + 0.01, y + 0.01, stroke.width)
       recordTrail([{ x, y }, { x: x + 0.01, y: y + 0.01 }], half, 0, 0)
     },
@@ -1032,8 +1273,8 @@ export function createInk() {
       stroke.peakT = t
       if (dist > 0.5 * px) stroke.rest = 0
 
-      const fast = Math.min(1, stroke.speed / NIB_FAST)
-      const target = NIB_WIDTH_SLOW + (NIB_WIDTH_FAST - NIB_WIDTH_SLOW) * (1 - (1 - fast) ** 2)
+      const fast = Math.min(1, stroke.speed / fastAt())
+      const target = pen.widthSlow + (pen.widthFast - pen.widthSlow) * (1 - (1 - fast) ** 2)
       stroke.width += (target - stroke.width) * 0.25
 
       // Ignore jitter too small to bend the curve.
@@ -1051,8 +1292,8 @@ export function createInk() {
       }
 
       // Moving again re-arms the splatter; nearly stopping after speed fires it.
-      if (speed > SPLAT_STOP * 2) stroke.splatted = false
-      else if (speed < SPLAT_STOP && !stroke.splatted && stroke.peak > SPLAT_SPEED) splat()
+      if (speed > pen.splatStop * 2) stroke.splatted = false
+      else if (speed < pen.splatStop && !stroke.splatted && stroke.peak > pen.splatSpeed) splat()
     },
 
     // Per frame (nowMs on the pointer-event clock): a sudden stop with no more
@@ -1060,7 +1301,7 @@ export function createInk() {
     // pool; strokes past their lifespan are cleared.
     update(dt, nowMs) {
       // Each still-wet part of the ink checks whether its next layer is due.
-      if (BLEED > 0 && (wet.length || drawing().length)) bleedStep()
+      if (pen.bleed > 0 && (wet.length || drawing().length)) bleedStep()
       if (INK_LIFESPAN > 0) {
         // Strokes past their lifespan and fade: clear their ink, a few tiles
         // per frame.

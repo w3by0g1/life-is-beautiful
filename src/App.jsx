@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPaperScene } from "./paperScene.js";
-import { artistsLayout, infoLayout, infoTextWidth } from "./layout.js";
+import { artistsLayout, artistsLayoutTall, infoLayout, infoLayoutTall, infoTextWidth, isTall, tallTextLeft, tallTextWidth } from "./layout.js";
 import { ARTISTS } from "./artists.js";
 import { fetchArtists, fetchInfo } from "./sanity.js";
-import ArtistPage, { RichText } from "./ArtistPage.jsx";
+import ArtistPage from "./ArtistPage.jsx";
+import InfoText from "./InfoText.jsx";
 import HappeningsPage from "./HappeningsPage.jsx";
 import logoUrl from "./assets/logo.jpg";
 import headerLogoUrl from "./assets/header-logo.png";
@@ -14,6 +15,10 @@ const NAV = ["artists", "gallery", "happenings", "info"];
 // the artist list, "#artists/<slug>" opens that artist's page over it,
 // "#happenings" shows the calendar, "#info" pans the sheet the other way and
 // shows the info text; anything else is the plain sheet.
+// The header link the address belongs to ("#artists/aloisius" → "artists"),
+// whether or not there's a view behind it yet.
+const sectionFromHash = () => window.location.hash.replace(/^#/, "").split("/")[0];
+
 const viewFromHash = () => {
   const h = window.location.hash;
   if (h.startsWith("#artists")) return "artists";
@@ -45,29 +50,62 @@ const artistFromHash = () => {
 function App() {
   const containerRef = useRef(null);
   const listRef = useRef(null);
+  const infoRef = useRef(null);
   const sceneRef = useRef(null);
   const [view, setView] = useState(viewFromHash);
+  const [section, setSection] = useState(sectionFromHash);
   const [artistSlug, setArtistSlug] = useState(artistFromHash);
   // The artists, from Sanity once loaded (the built-in list until then).
   const [artists, setArtists] = useState(() => ARTISTS.map((name) => ({ name, slug: name })));
-  // Where the list sits (fixed-position CSS) and how far the sheet pans so the
-  // logo sits to the list's right.
-  const [layout, setLayout] = useState({ pan: 0, right: 0, top: 0, infoPan: 0, infoLeft: 0, infoWidth: 400 });
+  // Where the list and the info text sit (fixed-position CSS) and how far the
+  // sheet pans so the logo makes room for them: beside them on a wide screen,
+  // and above or below them on a narrow one (`tall`; see layout.js).
+  const [layout, setLayout] = useState({
+    tall: false,
+    pan: 0,
+    right: 0,
+    top: 0,
+    infoPan: 0,
+    infoLeft: 0,
+    infoWidth: 400,
+    artistsPanY: 0,
+    listBottom: 0,
+    infoPanY: 0,
+    textTop: 0,
+    left: 0,
+  });
   const [info, setInfo] = useState(INFO_FALLBACK);
-  const panTarget = view === "artists" ? layout.pan : view === "info" ? layout.infoPan : 0;
-  const panRef = useRef(panTarget);
+  // Whether the sheet has appeared; until it has, the page is the paper's
+  // gradient with the title on it.
+  const [ready, setReady] = useState(false);
+  // Whether the happenings view is showing an event in place of the calendar
+  // (it does that where there's only room for one; see HappeningsPage), and
+  // the page's way back to the calendar.
+  const [eventShown, setEventShown] = useState(false);
+  const calendarBack = useRef(null);
+  const open = view === "artists" ? "artists" : view === "info" ? "info" : null;
+  const panX = !open || layout.tall ? 0 : open === "artists" ? layout.pan : layout.infoPan;
+  const panY = !open || !layout.tall ? 0 : open === "artists" ? layout.artistsPanY : layout.infoPanY;
+  const panRef = useRef([panX, panY]);
+  // Where the sheet rests (see the layout below), kept for the scene when it
+  // is made.
+  const restRef = useRef(0);
   // How far the artists and info views pan (set by the layout below before
-  // the scene is made), so the sheet is built with that much paper either side.
-  const panExtentRef = useRef({ left: 0, right: 0 });
+  // the scene is made), so the sheet is built with that much paper around it.
+  const panExtentRef = useRef({ left: 0, right: 0, top: 0, bottom: 0 });
 
   useEffect(() => {
     let dispose;
     let cancelled = false;
-    createPaperScene(containerRef.current, logoUrl, { panExtent: panExtentRef.current }).then((d) => {
+    createPaperScene(containerRef.current, logoUrl, {
+      panExtent: panExtentRef.current,
+      onReady: () => !cancelled && setReady(true),
+    }).then((d) => {
       if (cancelled) return d();
       dispose = d;
       sceneRef.current = d;
-      d.setPan(panRef.current);
+      d.setRest(restRef.current);
+      d.setPan(...panRef.current);
       d.setDrawing(viewFromHash() === "home");
     });
     return () => {
@@ -103,6 +141,7 @@ function App() {
   useEffect(() => {
     const onHash = () => {
       setView(viewFromHash());
+      setSection(sectionFromHash());
       setArtistSlug(artistFromHash());
     };
     // Esc steps back: from an artist to the list, from the list to the sheet.
@@ -125,18 +164,45 @@ function App() {
   useLayoutEffect(() => {
     const place = () => {
       const r = containerRef.current.getBoundingClientRect();
+      const tall = isTall(r.width);
+      const infoWidth = tall ? tallTextWidth(r.width) : infoTextWidth(r.width);
+      // The text is measured as it will be set, for the room it needs below
+      // the logo.
+      if (infoRef.current) infoRef.current.style.width = `${infoWidth}px`;
       const { pan, listRight } = artistsLayout(r.width, r.height, listRef.current.offsetWidth);
-      const infoWidth = infoTextWidth(r.width);
       const { pan: infoPan, textLeft } = infoLayout(r.width, r.height, infoWidth);
-      panExtentRef.current = { left: pan, right: -infoPan };
+      // What of the sheet is on screen, in the scene's own coordinates: it
+      // starts above the top of the screen on phones (see fullBleed.js), the
+      // header covers its first stretch, and a phone browser's bar floats over
+      // the last.
+      const view = { top: 96 - r.top, bottom: window.innerHeight - 56 - r.top };
+      // Where the logo rests: the middle of what's on screen, which on a phone
+      // is below the middle of the scene (it runs up behind the status bar).
+      const restY = -r.top + window.innerHeight / 2 - r.height / 2;
+      sceneRef.current?.setRest(restY);
+      restRef.current = restY;
+      const rest = r.height / 2 + restY;
+      const { middle: artistsMiddle, listBottom } = artistsLayoutTall(r.width, r.height, listRef.current.offsetHeight, view);
+      const { middle: infoMiddle, textTop } = infoLayoutTall(r.width, r.height, infoRef.current?.offsetHeight ?? 0, view);
+      const artistsPanY = artistsMiddle - rest;
+      const infoPanY = infoMiddle - rest;
+      panExtentRef.current = tall
+        ? { left: 0, right: 0, top: artistsPanY, bottom: -infoPanY }
+        : { left: pan, right: -infoPan, top: 0, bottom: 0 };
       sceneRef.current?.setPanExtent(panExtentRef.current);
       setLayout({
+        tall,
         pan,
         right: window.innerWidth - (r.left + listRight),
         top: r.top + r.height / 2,
         infoPan,
         infoLeft: r.left + textLeft,
         infoWidth,
+        artistsPanY,
+        listBottom: r.top + listBottom,
+        infoPanY,
+        textTop: r.top + textTop,
+        left: r.left + tallTextLeft(r.width),
       });
     };
     place();
@@ -146,13 +212,13 @@ function App() {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place);
     };
-    // Re-placed when the list changes (its width decides the pan).
-  }, [artists]);
+    // Re-placed when the list or the text changes (their size decides the pan).
+  }, [artists, info]);
 
   useEffect(() => {
-    panRef.current = panTarget;
-    sceneRef.current?.setPan(panTarget);
-  }, [panTarget]);
+    panRef.current = [panX, panY];
+    sceneRef.current?.setPan(panX, panY);
+  }, [panX, panY]);
 
   // No drawing while the artists or the calendar are showing: the ink fades
   // out, and back in on leaving.
@@ -163,7 +229,12 @@ function App() {
   return (
     <>
       <div ref={containerRef} className="scene" />
-      <header className="site-header">
+      {/* While the paper is being made, its name in the middle of the empty
+          sheet; it fades away as the paper comes in. */}
+      <div className={`opening${ready ? " gone" : ""}`} aria-hidden={ready}>
+        life is beautiful
+      </div>
+      <header className={`site-header${ready ? " ready" : ""}`}>
         <a className="site-logo" href="#" aria-label="Home">
           <img src={headerLogoUrl} alt="" />
         </a>
@@ -172,13 +243,17 @@ function App() {
             <a
               key={item}
               href={`#${item}`}
-              className={view === item ? "active" : undefined}
+              // The label again, for the width its bold self takes (index.css).
+              data-label={item}
+              className={section === item ? "active" : undefined}
               onClick={(e) => {
                 // Clicking the open view's link again closes it (from an
-                // artist's page, it goes back to the list).
+                // artist's page, it goes back to the list; from an event
+                // filling the screen, back to the calendar).
                 if (view === item && !artistSlug) {
                   e.preventDefault();
-                  window.location.hash = "";
+                  if (item === "happenings" && eventShown) calendarBack.current?.();
+                  else window.location.hash = "";
                 }
               }}
             >
@@ -189,8 +264,12 @@ function App() {
       </header>
       <ul
         ref={listRef}
-        className={`artists${view === "artists" ? " open" : ""}`}
-        style={{ right: layout.right, top: layout.top }}
+        className={`artists${view === "artists" ? " open" : ""}${layout.tall ? " tall" : ""}${ready ? " ready" : ""}`}
+        style={
+          layout.tall
+            ? { left: layout.left, width: layout.infoWidth, top: layout.listBottom }
+            : { right: layout.right, top: layout.top }
+        }
         aria-hidden={view !== "artists"}
       >
         {artists.map(({ name, slug }, i) => (
@@ -202,17 +281,24 @@ function App() {
         ))}
       </ul>
       <div
-        className={`info-text${view === "info" ? " open" : ""}`}
-        style={{ left: layout.infoLeft, top: layout.top, width: layout.infoWidth }}
+        ref={infoRef}
+        className={`info-text${view === "info" ? " open" : ""}${layout.tall ? " tall" : ""}${ready ? " ready" : ""}`}
+        style={
+          layout.tall
+            ? { left: layout.left, top: layout.textTop, width: layout.infoWidth }
+            : { left: layout.infoLeft, top: layout.top, width: layout.infoWidth }
+        }
         aria-hidden={view !== "info"}
       >
-        <RichText value={info} />
+        <InfoText value={info} width={layout.infoWidth} />
       </div>
       <ArtistPage slug={artistSlug} onClose={() => (window.location.hash = "artists")} />
       <HappeningsPage
         open={view === "happenings"}
         onClose={() => (window.location.hash = "")}
         onArtist={(slug) => (window.location.hash = `artists/${encodeURIComponent(slug)}`)}
+        onEventShown={setEventShown}
+        backRef={calendarBack}
       />
     </>
   );
