@@ -42,6 +42,23 @@ export function RichText({ value }) {
   });
 }
 
+// A line of details (a date, a time, a place), with the dots set close to the
+// words rather than a monospace space either side of them.
+export function Meta({ parts, className = "ap-meta" }) {
+  const items = parts.filter(Boolean);
+  if (!items.length) return null;
+  return (
+    <p className={className}>
+      {items.map((part, i) => (
+        <span key={i}>
+          {i > 0 && <span className="meta-dot">·</span>}
+          {part}
+        </span>
+      ))}
+    </p>
+  );
+}
+
 function Listen({ href }) {
   if (!href) return null;
   return (
@@ -58,9 +75,7 @@ function ReleaseText({ item, kind }) {
         <h3>{item.title}</h3>
         <Listen href={item.link} />
       </div>
-      <p className="ap-meta">
-        {[formatDate(item.date), kind].filter(Boolean).join(" · ")}
-      </p>
+      <Meta parts={[formatDate(item.date), kind]} />
       <div className="ap-rich">
         <RichText value={item.description} />
       </div>
@@ -79,7 +94,10 @@ function Album({ item, artistName }) {
           <ol className="ap-tracks">
             {tracks.map((t, i) => (
               <li key={t._key}>
-                <span className="ap-track-no">{i + 1}</span>
+                {/* A number on a filled dot, as in the design. */}
+                <span className="ap-track-no">
+                  <span className="ap-track-dot">{i + 1}</span>
+                </span>
                 <strong>{t.title}</strong> {t.credit || artistName}
               </li>
             ))}

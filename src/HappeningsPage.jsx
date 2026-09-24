@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { fetchEvents, imageUrl } from "./sanity.js";
-import { RichText } from "./ArtistPage.jsx";
+import { Meta, RichText } from "./ArtistPage.jsx";
 
 // The happenings calendar, over the blurred sheet: a month of days (Monday
 // first), each day with an event showing its poster, and the chosen event's
@@ -84,7 +84,7 @@ function EventDetails({ event, onArtist, onBack }) {
         </button>
         {event.title}
       </h2>
-      <p className="ap-meta">{[formatDate(event.date), event.time, event.venue].filter(Boolean).join(" · ")}</p>
+      <Meta parts={[formatDate(event.date), event.time, event.venue]} />
       <Lineup lineup={event.lineup} onArtist={onArtist} />
       <div className="ap-rich hp-description">
         <RichText value={event.description} />

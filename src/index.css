@@ -82,9 +82,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 22px;
-  letter-spacing: 0.02em;
+  font-weight: 350;
+  letter-spacing: -0.08em;
   color: #1a1a1a;
   mix-blend-mode: multiply;
   pointer-events: none;
@@ -127,8 +128,10 @@ body {
   padding: 10px clamp(16px, 2.2vw, 32px);
   padding-left: calc(clamp(16px, 2.2vw, 32px) + env(safe-area-inset-left, 0px));
   pointer-events: none;
-  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
+  font-weight: 350;
+  letter-spacing: -0.08em;
   color: #111;
 }
 
@@ -145,19 +148,25 @@ body {
   text-shadow: 0 0 7px rgba(255, 255, 255, 0.95);
 }
 
+/* Inter is a variable face, so a link can grow into its bold weight rather
+   than snapping to it. */
+.site-header nav a {
+  transition: font-weight 0.3s ease;
+}
+
 /* Hovering sets a link bold, like the view you're in; nothing in the header
    is underlined. (Only where there's a pointer to hover with: a phone keeps
    :hover on whatever was tapped last.) */
 @media (hover: hover) and (pointer: fine) {
   .site-header nav a:hover {
-    font-weight: 600;
+    font-weight: 500;
   }
 }
 
 /* The view you're in is set bold. Each link keeps the width of its bold self
    (the hidden copy below), so the row doesn't shuffle along as it changes. */
 .site-header nav a.active {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .site-header nav a::after {
@@ -165,13 +174,13 @@ body {
   display: block;
   height: 0;
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 500;
   visibility: hidden;
   pointer-events: none;
 }
 
 /* The artist list beside the logo (#artists). Right-aligned, level with the
-   logo's middle; placed by App.jsx. Set in EB Garamond and multiplied onto
+   logo's middle; placed by App.jsx. Set in Inter and multiplied onto
    the sheet, so the paper's grain and light show through as if printed.
    The names blur into focus as they fade in, once the pan has mostly
    settled, each a moment after the one above; they fade out together.
@@ -186,9 +195,11 @@ body {
   list-style: none;
   transform: translateY(-50%);
   text-align: right;
-  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 20px;
-  line-height: 26px;
+  font-weight: 350;
+  line-height: 32px;
+  letter-spacing: -0.08em;
   color: #1a1a1a;
   mix-blend-mode: multiply;
   white-space: nowrap;
@@ -247,7 +258,7 @@ body {
 }
 
 .artists.open li:hover {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .artists a {
@@ -262,10 +273,11 @@ body {
   position: fixed;
   z-index: 1;
   transform: translateY(-50%);
-  font-family: 'EB Garamond', Garamond, 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-size: 21px;
-  line-height: 1.5;
-  letter-spacing: -0.01em;
+  font-family: 'Inter', system-ui, -apple-system, 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 19px;
+  font-weight: 350;
+  line-height: 1.65;
+  letter-spacing: -0.08em;
   color: #2a2a2a;
   mix-blend-mode: multiply;
   pointer-events: none;
@@ -296,6 +308,10 @@ body {
 
 .info-text p {
   margin: 0 0 1em;
+}
+
+.info-text strong {
+  font-weight: 500;
 }
 
 .info-text p:last-child {
@@ -338,7 +354,9 @@ body {
     opacity 0.45s ease,
     visibility 0s linear 0.45s;
   color: #777;
-  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 350;
+  letter-spacing: -0.08em;
 }
 
 .artist-page.open {
@@ -446,7 +464,7 @@ body {
 }
 
 .ap-rich strong {
-  font-weight: 600;
+  font-weight: 500;
   color: #5c5c5c;
 }
 
@@ -456,8 +474,8 @@ body {
 
 .ap-bio {
   margin-top: 8px;
-  font-size: 19px;
-  line-height: 26px;
+  font-size: 17px;
+  line-height: 24px;
 }
 
 .ap-links {
@@ -548,22 +566,29 @@ body {
   margin: 6px 0 8px;
   font-family: 'Rigid Square Arrows', ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 12.5px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   color: #888;
 }
 
+/* The dot between the parts, kept close to them (a monospace space either
+   side would hold them well apart). */
+.meta-dot {
+  display: inline-block;
+  margin: 0 0.3em;
+}
+
 .ap-release-text .ap-rich {
-  font-size: 17px;
-  line-height: 20px;
+  font-size: 15px;
+  line-height: 21px;
 }
 
 .ap-tracks {
-  margin: 28px 0 0;
+  margin: 14px 0 0;
   /* Numbers start at the text column's edge, in line with the description. */
   padding: 0;
   list-style: none;
-  font-size: 17px;
-  line-height: 24px;
+  font-size: 15px;
+  line-height: 22px;
 }
 
 /* Wrapped lines hang under the title, not the number. */
@@ -573,17 +598,36 @@ body {
 }
 
 .ap-tracks strong {
-  font-weight: 600;
+  font-weight: 500;
   color: #666;
 }
 
-/* The track number, plainly set in the page's Garamond like the rest of the
-   line. */
 .ap-track-no {
   display: inline-block;
   width: 24px;
   /* Its own box would otherwise inherit the line's hanging indent. */
   text-indent: 0;
+}
+
+/* The track number in Neue Haas Grotesk Medium, white on a grey dot (it
+   stretches into a pill for two digits). */
+.ap-track-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 11px;
+  height: 11px;
+  padding: 0 2.5px;
+  border-radius: 6px;
+  background: #777;
+  color: #fff;
+  font-family: 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 7.5px;
+  letter-spacing: normal;
+  line-height: 1;
+  vertical-align: 2px;
 }
 
 .ap-media img,
@@ -657,9 +701,9 @@ body {
 }
 
 .hp-inner.has-event .hp-side {
-  /* The details, plus the 20px gap to the calendar. */
-  width: 421px;
-  padding-left: 20px;
+  /* The details, plus the 56px gap to the calendar. */
+  width: 457px;
+  padding-left: 56px;
   opacity: 1;
   transition:
     width 0.45s cubic-bezier(0.2, 0.7, 0.2, 1),
@@ -674,6 +718,10 @@ body {
    that five weeks fill 95% of the height left on screen; a six-week month
    runs a little past the bottom. */
 .hp-calendar {
+  /* The calendar itself stays in Garamond — the month, the days of the week
+     and the dates on the cells; the rest of the site is set in Inter. */
+  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  letter-spacing: normal;
   flex: 0 0 auto;
   width: min(100%, calc(((100vh - var(--around)) * 0.95 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
   width: min(100%, calc(((100svh - var(--around)) * 0.95 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
@@ -687,12 +735,14 @@ body {
   gap: 18px;
 }
 
+/* The month is set in Inter like the rest of the site; the days and dates
+   below it keep the calendar's Garamond. */
 .hp-month h2 {
   margin: 0;
-  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 32px;
-  font-weight: 400;
-  letter-spacing: 0;
+  font-weight: 350;
+  letter-spacing: -0.08em;
   color: #222;
 }
 
@@ -847,7 +897,7 @@ body {
   font-weight: 400;
   line-height: 1.15;
   letter-spacing: -0.01em;
-  color: #333;
+  color: #111;
 }
 
 /* Back to the calendar, before the event's title. */
@@ -872,6 +922,7 @@ body {
 
 .hp-details .ap-meta {
   margin: 0 0 8px;
+  color: #1a1a1a;
 }
 
 .hp-lineup {
@@ -882,7 +933,7 @@ body {
   -webkit-line-clamp: 3;
   font-size: 15px;
   line-height: 18px;
-  color: #555;
+  color: #1a1a1a;
 }
 
 .hp-lineup a {
@@ -892,9 +943,9 @@ body {
 
 .hp-description {
   margin-top: 16px;
-  font-size: 15px;
-  line-height: 20px;
-  color: #888;
+  font-size: 20px;
+  line-height: 25px;
+  color: #444;
 }
 
 .hp-tickets {
