@@ -42,9 +42,9 @@ export const DEFAULT_PEN = 'calligraphy'
 const PEN_STYLES = {
   calligraphy: {
     nib: 15,
-    angle: 0,
+    angle: -50,
     widthSlow: 1.35,
-    widthFast: 0.18,
+    widthFast: 0.07,
     fastAt: 900,
     core: '#161d19',
     dot: '#2c3b31',
@@ -58,8 +58,8 @@ const PEN_STYLES = {
     hollow: 0,
     poolColor: '#060a07',
     pooling: 1,
-    blotTouch: 0.35,
-    blotLift: 0.3,
+    blotTouch: 0.12,
+    blotLift: 0.1,
     blotRest: 0.9,
     restTime: 1.5,
     flickChance: 0.5,
@@ -593,6 +593,7 @@ export function createInk() {
     ctx.globalAlpha = pen.alpha
     ctx.fillStyle = corePattern()
     ctx.strokeStyle = corePattern()
+    ctx.lineCap = 'butt'
     quad(0.72)
     ctx.fill()
     ctx.lineWidth = 1.1 * px
@@ -627,6 +628,7 @@ export function createInk() {
     ctx.fillStyle = pen.edge
     ctx.strokeStyle = pen.edge
     ctx.lineJoin = 'round'
+    ctx.lineCap = 'butt'
     ctx.lineWidth = 2 * px * pen.edgeWidth
     quad(1)
     ctx.fill()
@@ -710,11 +712,12 @@ export function createInk() {
   // The nib's length in canvas px, for the pen in hand or another style.
   const nibOf = (style = pen) => style.nib * penScale * px
   const nib = () => nibOf()
-  // The speed (CSS px/s) a pen thins out at, scaled with it: on a smaller
-  // sheet the same gesture covers fewer px a second, so the line would
-  // otherwise never thin. (Splattering isn't scaled: how hard the hand
-  // actually flicks is what throws ink, whatever the sheet's size.)
-  const fastAt = () => pen.fastAt * penScale
+  // The speed (CSS px/s) a pen thins out at. A finger on a phone travels
+  // faster than a hand on a mouse, so the threshold rises as the pen gets
+  // smaller: at a phone's half-size pen it takes twice the speed to reach the
+  // thin end. (Left where it is, every ordinary stroke is past that end and
+  // lines come out an even width, with no taper at all.)
+  const fastAt = () => pen.fastAt / penScale
 
   // One layer of a group's halo: its path widened by how far the ink has crept
   // by `age`, laid faintly behind the ink already there. `period` is how long

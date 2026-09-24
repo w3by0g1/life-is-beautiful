@@ -73,6 +73,10 @@ const INK_WICK = 1
 const INK_POOL = 0.45
 // Ink density varies in soft blotches across a stroke (0 = even).
 const INK_BLOTCH = 0.5
+// How much a broad stroke runs dry down its middle, in patches, where the nib
+// left less ink than along its edges (0 = solid). Thin lines are all edge, so
+// they stay solid whatever this is.
+const INK_HOLLOW = 0.2
 // Ink and the paper surface: how much ink skips (goes patchy) on raised logo
 // lines, and how much darker it sits where it runs into grooves (scratches,
 // valley folds, and logo lines pressed in by clicking).
@@ -151,7 +155,7 @@ const PAPER_TO = 'rgb(229, 229, 229)'
 // skipped altogether.
 const HAZE_ON = true
 const HAZE_BLUR = 10
-const HAZE_AMOUNT = 0.24
+const HAZE_AMOUNT = 0.25
 const HAZE_TINT = 0.07
 // How much of the haze lies over ink (1 = as over the paper). Lower keeps
 // dark ink dark: over thin lines the haze is mostly the paper around them.
@@ -359,6 +363,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     inkDebug: { value: 0 },
     inkGroove: { value: INK_GROOVE },
     inkBlotch: { value: INK_BLOTCH },
+    inkHollow: { value: INK_HOLLOW },
     paintTexel: { value: new THREE.Vector2(1, 1) },
     inkBleed: { value: 1 },
     inkWick: { value: INK_WICK },
@@ -443,6 +448,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
         uniform float inkGapSide;
         uniform float inkGroove;
         uniform float inkBlotch;
+        uniform float inkHollow;
         uniform vec2 paintTexel;
         uniform float inkBleed;
         uniform float inkWick;
@@ -558,6 +564,17 @@ export async function createPaperScene(container, logoUrl, options = {}) {
             inkCol *= 1.0 - inkPool * inkRing;
             // Uneven density: soft blotches where more ink soaked in.
             inkCol *= 1.0 - inkBlotch * smoothstep( 0.35, 0.8, fogFbm( wp * 7.0 + 13.0 ) );
+
+            // Down the middle of a broad stroke the nib leaves less ink than
+            // along its edges, in patches, so the paper shows faintly through
+            // (see INK_HOLLOW). Only where the ink runs deep: a thin line is
+            // all edge, and stays solid.
+            // How broad the stroke is here: the outer ring is only covered
+            // well inside a stroke wider than it reaches, so a thin line
+            // (where every part is edge) never counts as deep.
+            float deep = smoothstep( 0.55, 0.95, aOut / 8.0 );
+            float dry = smoothstep( 0.3, 0.85, fogFbm( wp * 16.0 + 31.0 ) );
+            inkCover *= 1.0 - inkHollow * deep * dry;
 
             // The ink meets the surface: it skips in patches over raised logo
             // lines, and creeps into and pools darker in grooves (scratches,
