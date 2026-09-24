@@ -68,7 +68,7 @@ const TRAIL_RECOVER = 1.4
 const PAINT = true
 // Ink look: how far its edges bleed into the paper (CSS px), how much the paper
 // fibres make the edge wick unevenly, and how much ink pools darker at the edge.
-const INK_BLEED = 2.2
+const INK_BLEED = 1.2
 const INK_WICK = 1
 const INK_POOL = 0.45
 // Ink density varies in soft blotches across a stroke (0 = even).
@@ -147,9 +147,12 @@ const PAPER_TO = 'rgb(229, 229, 229)'
 
 // Haze over the whole scene, like light through tracing paper: blur (CSS px),
 // how much of the blurred scene is mixed in (0 = off), and a white wash over it.
+// HAZE_ON is the switch: off, the scene is drawn sharp and the blur passes are
+// skipped altogether.
+const HAZE_ON = true
 const HAZE_BLUR = 10
-const HAZE_AMOUNT = 0.4
-const HAZE_TINT = 0.12
+const HAZE_AMOUNT = 0.24
+const HAZE_TINT = 0.07
 // How much of the haze lies over ink (1 = as over the paper). Lower keeps
 // dark ink dark: over thin lines the haze is mostly the paper around them.
 const INK_HAZE = 0.25
@@ -545,6 +548,12 @@ export async function createPaperScene(container, logoUrl, options = {}) {
             // edge stays ragged without single-pixel holes.
             float fibreN = 0.5 * ( surfT.b + texture2D( normalMap, paperUv + paintTexel * vec2( 1.5, -1.0 ) ).b ) - 0.5;
             float inkCover = smoothstep( 0.12, 0.6, inkA + fibreN * 2.0 * inkWick );
+            // That reading is blurred over both rings, which a line thinner
+            // than they reach can never fill, leaving it pale and hollow. The
+            // near one (the middle and the inner ring) covers those lines, and
+            // still ramps across the stroke's edge rather than cutting at it.
+            float aNear = ( inkC.a + aIn * 0.8 ) / ( 1.0 + 8.0 * 0.8 );
+            inkCover = max( inkCover, smoothstep( 0.2, 0.62, aNear + fibreN * 1.2 * inkWick ) );
             float inkRing = inkCover * ( 1.0 - smoothstep( 0.4, 0.95, inkA ) );
             inkCol *= 1.0 - inkPool * inkRing;
             // Uneven density: soft blotches where more ink soaked in.
@@ -686,7 +695,11 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   Object.assign(embossUniforms, ink.uniforms)
   embossUniforms.paintMap.value = ink.texture
   embossUniforms.inkBounds.value = ink.bounds
-  const haze = createHaze(renderer, { blur: HAZE_BLUR, amount: HAZE_AMOUNT, tint: HAZE_TINT })
+  const haze = createHaze(renderer, {
+    blur: HAZE_BLUR,
+    amount: HAZE_ON ? HAZE_AMOUNT : 0,
+    tint: HAZE_ON ? HAZE_TINT : 0,
+  })
   haze.setMask(ink.texture, embossUniforms.inkRemap.value, ink.uniforms.inkOpacity, INK_HAZE)
   // Not over the raised logo, where the ink itself is held off (see
   // INK_ON_LOGO): otherwise the haze thinning alone would show the stroke.
@@ -849,14 +862,18 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     const ipx = iw / sheetW
     ink.resize(iw, ih, ipx, { cx: (left + vw / 2) * ipx, cy: (top + vh / 2) * ipx, base: Math.min(vw, vh) * ipx })
     // A smaller screen holds a smaller sheet, so it takes a smaller pen (see
-    // setPenScale); never below half, or a phone's lines would be wispy.
-    ink.setPenScale(Math.min(1, Math.max(0.5, Math.min(vw, vh) / PEN_AT)))
+    // setPenScale); never below half, or a phone's lines would be wispy. How
+    // far the ink's edge bleeds, and how far it reaches around the logo's
+    // lines, go with it: a soft edge of a fixed width would eat the middle out
+    // of a smaller pen's lines.
+    const penScale = Math.min(1, Math.max(0.5, Math.min(vw, vh) / PEN_AT))
+    ink.setPenScale(penScale)
     // Ink ages must cover the soft edge the shader gives ink (its outer ring).
-    ink.setBlurReach(INK_BLEED * 2 + 1)
+    ink.setBlurReach(INK_BLEED * penScale * 2 + 1)
     inkSize = [vw, vh, left, right, top, bottom]
     embossUniforms.paintTexel.value.set(1 / iw, 1 / ih)
-    embossUniforms.inkBleed.value = INK_BLEED * ipx
-    embossUniforms.inkBaseReach.value = INK_BASE_REACH * ipx
+    embossUniforms.inkBleed.value = INK_BLEED * penScale * ipx
+    embossUniforms.inkBaseReach.value = INK_BASE_REACH * penScale * ipx
     fitRemaps()
     // The old textures stay in use until the new ones are ready.
     requestedSize = [vw, vh, left, right, top, bottom]
