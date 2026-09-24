@@ -42,7 +42,7 @@ export const DEFAULT_PEN = 'calligraphy'
 const PEN_STYLES = {
   calligraphy: {
     nib: 15,
-    angle: -38,
+    angle: 0,
     widthSlow: 1.35,
     widthFast: 0.18,
     fastAt: 900,
@@ -109,7 +109,7 @@ const PEN_STYLES = {
   // little blobs, with barely any spread into the paper.
   'biro blue': {
     nib: 4.6,
-    angle: -38,
+    angle: 0,
     widthSlow: 1,
     widthFast: 0.7,
     fastAt: 1400,
@@ -140,7 +140,7 @@ const PEN_STYLES = {
   },
   'biro red': {
     nib: 4.6,
-    angle: -38,
+    angle: 0,
     widthSlow: 1,
     widthFast: 0.7,
     fastAt: 1400,
@@ -501,11 +501,12 @@ export function createInk() {
     path(ageCtx)
     if (fill) ageCtx.fill()
     ageCtx.stroke()
-    // The ink itself is newest: it's painted over whatever was under it. One
-    // age texel wider than the ink, so the blended rim of this shape lands
-    // just outside the ink rather than on its edge pixels.
+    // The ink itself is newest: it's painted over whatever was under it, but
+    // no wider than the ink goes — a margin here would make older ink beside
+    // this stroke read as new, so it would outlive its own stroke and be left
+    // behind as a rind along this one.
     ageCtx.globalCompositeOperation = 'source-over'
-    ageCtx.lineWidth = width + 4
+    ageCtx.lineWidth = width
     path(ageCtx)
     if (fill) ageCtx.fill()
     ageCtx.stroke()
