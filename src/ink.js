@@ -173,7 +173,7 @@ const PEN_STYLES = {
 
 // Lifespan: seconds each stroke stays at full strength from when it's drawn (0
 // = forever), then how many seconds it takes to fade away.
-export const INK_LIFESPAN = 600
+export const INK_LIFESPAN = 10
 export const INK_FADE = 3
 // Bleeding: after ink lands it slowly spreads into the paper as a pale,
 // diluted halo (how far and how strongly is the pen's; see PEN_STYLES). It
@@ -1198,8 +1198,13 @@ export function createInk() {
     // Scene time in seconds; call once per frame before drawing.
     setTime(t) {
       now = t + HEADROOM
-      if (ageStepAt(t) > 250) rebase(ageStepAt(t) - 125)
-      uniforms.inkNowStep.value = t / AGE_STEP - ageBase
+      // Strokes are stamped with the step they began in, on this same clock
+      // (`now`, the head start included), so the shader is given the step it
+      // is now — otherwise ink would be cleared away before it began to fade.
+      // Ages only go up to 255 steps, so everything is shifted down well
+      // before the count runs out.
+      if (ageStepAt(now) > 250) rebase(ageStepAt(now) - 125)
+      uniforms.inkNowStep.value = now / AGE_STEP - ageBase
     },
 
     // How big the pen is against the sizes in PEN_STYLES (1 = as given). The
@@ -1313,7 +1318,10 @@ export function createInk() {
           expired = true
         }
         if (expired) recomputeBounds()
-        let budget = 4
+        // A few tiles a frame, so clearing a sheet's worth of faded ink never
+        // costs a frame; with the page in another tab there's no frame to
+        // spare and a backlog to clear, so it goes faster.
+        let budget = document.hidden ? 64 : 4
         for (const k of clearQueue) {
           clearQueue.delete(k)
           clearTile(k)

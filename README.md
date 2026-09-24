@@ -2,7 +2,7 @@
 
 An interactive sheet of embossed paper, rendered with three.js: a raised logo that rises in on load, paper texture with fibres, creases and scratches, drifting dust and fog, and a moving light (the mouse, or the phone's tilt). Press to deboss the logo, and drag to write in calligraphic ink that bleeds into the paper and fades after a few minutes.
 
-Live: https://w3by0g1.github.io/embossed-paper/
+Live: https://w3by0g1.github.io/life-is-beautiful/
 
 ## Running it
 
@@ -29,7 +29,7 @@ A new site address needs adding as a CORS origin before it can read the content:
 
 ## Live drawing (Firebase)
 
-Strokes are shared live between everyone on the site through a Firebase Realtime Database (project `life-is-beautiful-sketches`, "life is beautiful live sketch", in europe-west1); see `src/liveSketch.js`. Each stroke lasts 10 minutes (`INK_LIFESPAN` in `src/ink.js`), newcomers see everything from the last 10 minutes, and older strokes are deleted by whichever visitor notices them. The security rules are in `firebase/database.rules.json`:
+Strokes are shared live between everyone on the site through a Firebase Realtime Database (project `life-is-beautiful-sketches`, "life is beautiful live sketch", in europe-west1); see `src/liveSketch.js`. Each stroke lasts 10 seconds (`INK_LIFESPAN` in `src/ink.js`), newcomers see everything still alive, and older strokes are deleted by whichever visitor notices them (the rules allow that once a stroke has outlived the ink, so they need redeploying if the lifespan changes much). The security rules are in `firebase/database.rules.json`:
 
 ```sh
 cd firebase && firebase deploy --only database   # publish rule changes

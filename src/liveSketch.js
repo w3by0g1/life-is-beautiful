@@ -29,8 +29,9 @@ const SEND_EVERY = 50
 // arriving unevenly still play back smoothly.
 const PLAY_DELAY = 180
 // A stroke started longer ago than this (ms) when it arrives is drawn at once
-// rather than replayed live.
-const LIVE_WINDOW = 20000
+// rather than replayed live — never more than half its life, or a stroke could
+// still be playing back as it fades.
+const LIVE_WINDOW = Math.min(20000, STROKE_LIFETIME / 2)
 // A live stroke that gets no new points for this long (ms) is finished off
 // (its sender may have closed the page mid-stroke).
 const STALL_TIMEOUT = 8000
@@ -137,7 +138,9 @@ export function createLiveSketch({ element, offset, offsetY = () => 0, pen, penS
   // however many there are, none of it holds up the page. Each is drawn as old
   // as it really is, so waiting its turn doesn't make it outstay its lifetime.
   const drawWaiting = () => {
-    const until = performance.now() + HISTORY_BUDGET
+    // With the page in another tab there's no frame to keep up, and a tab
+    // comes back to a backlog, so more is drawn at a time there.
+    const until = performance.now() + (document.hidden ? 50 : HISTORY_BUDGET)
     while (waiting.length) {
       const s = waiting[0]
       if (!s.i) {

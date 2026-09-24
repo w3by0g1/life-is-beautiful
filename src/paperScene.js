@@ -1146,6 +1146,24 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   let angle = -Math.PI * 0.75
   let angleVel = 0
   let elapsed = 0
+  // The ink keeps its own clock, on real time: the scene's stops while the
+  // page is in another tab (nothing is being drawn to the screen), but ink
+  // must go on ageing away there, and other people's strokes go on arriving.
+  const inkStart = performance.now()
+  const inkNow = () => (performance.now() - inkStart) / 1000
+  // With the animation loop stopped, a plain timer keeps the ink up to date:
+  // strokes are laid down and cleared, ready for the page coming back.
+  const hiddenTick = () => {
+    live.update()
+    ink.setTime(inkNow())
+    ink.update(1, performance.now())
+  }
+  let hiddenTimer = null
+  const onVisibility = () => {
+    clearInterval(hiddenTimer)
+    hiddenTimer = document.hidden ? setInterval(hiddenTick, 1000) : null
+  }
+  document.addEventListener('visibilitychange', onVisibility)
   renderer.setAnimationLoop((now) => {
     timer.update(now)
     const dt = timer.getDelta()
@@ -1223,7 +1241,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     const afterEmboss = since - EMBOSS_DELAY - EMBOSS_DURATION
     intro.update(introStart !== null && afterEmboss >= 0, afterEmboss)
     live.update()
-    ink.setTime(elapsed)
+    ink.setTime(inkNow())
     ink.update(ldt, performance.now())
     ink.flush(renderer)
     haze.render(scene, camera)
@@ -1269,6 +1287,8 @@ export async function createPaperScene(container, logoUrl, options = {}) {
 
   function dispose() {
     renderer.setAnimationLoop(null)
+    clearInterval(hiddenTimer)
+    document.removeEventListener('visibilitychange', onVisibility)
     timer.dispose()
     tilt.dispose()
     clearTimeout(resizeTimer)
