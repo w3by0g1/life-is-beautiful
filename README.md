@@ -29,7 +29,7 @@ A new site address needs adding as a CORS origin before it can read the content:
 
 ## Live drawing (Firebase)
 
-Strokes are shared live between everyone on the site through a Firebase Realtime Database (project `life-is-beautiful-sketches`, "life is beautiful live sketch", in europe-west1); see `src/liveSketch.js`. Each stroke lasts 10 seconds (`INK_LIFESPAN` in `src/ink.js`), newcomers see everything still alive, and older strokes are deleted by whichever visitor notices them (the rules allow that once a stroke has outlived the ink, so they need redeploying if the lifespan changes much). The security rules are in `firebase/database.rules.json`:
+Strokes are shared live between everyone on the site through a Firebase Realtime Database (project `life-is-beautiful-sketches`, "life is beautiful live sketch", in europe-west1); see `src/liveSketch.js`. Each stroke lasts 2 minutes (`INK_LIFESPAN` in `src/ink.js`), newcomers see everything still alive, and older strokes are deleted by whichever visitor notices them (the rules allow that once a stroke has outlived the ink, so they need redeploying if the lifespan changes much). The security rules are in `firebase/database.rules.json`:
 
 ```sh
 cd firebase && firebase deploy --only database   # publish rule changes

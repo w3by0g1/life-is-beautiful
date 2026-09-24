@@ -9,7 +9,7 @@
       ".read": true,
       ".indexOn": ["t"],
       "$id": {
-        ".write": "(!data.exists() && newData.exists()) || (data.exists() && newData.exists() && data.child('t').val() > now - 600000) || (data.exists() && !newData.exists() && data.child('t').val() < now - 15000)",
+        ".write": "(!data.exists() && newData.exists()) || (data.exists() && newData.exists() && data.child('t').val() > now - 600000) || (data.exists() && !newData.exists() && data.child('t').val() < now - 125000)",
         ".validate": "newData.hasChildren(['t', 'u'])",
         "t": { ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() : newData.val() === now)" },
         "u": { ".validate": "newData.isString() && newData.val().length <= 32 && (!data.exists() || newData.val() === data.val())" },

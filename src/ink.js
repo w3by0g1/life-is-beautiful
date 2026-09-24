@@ -173,7 +173,7 @@ const PEN_STYLES = {
 
 // Lifespan: seconds each stroke stays at full strength from when it's drawn (0
 // = forever), then how many seconds it takes to fade away.
-export const INK_LIFESPAN = 10
+export const INK_LIFESPAN = 120
 export const INK_FADE = 3
 // Bleeding: after ink lands it slowly spreads into the paper as a pale,
 // diluted halo (how far and how strongly is the pen's; see PEN_STYLES). It
