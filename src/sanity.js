@@ -48,4 +48,7 @@ export const fetchEvents = () =>
   )
 
 // The info text (#info).
-export const fetchInfo = () => sanityQuery(`*[_id == "info"][0].text`)
+export const fetchInfo = () => sanityQuery(`*[_id == "info"][0] { text, bandcamp, instagram }`)
+
+// The sheet's settings (how long a drawing stays, in minutes).
+export const fetchSettings = () => sanityQuery(`*[_id == "settings"][0] { strokeMinutes }`)

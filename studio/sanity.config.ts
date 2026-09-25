@@ -30,6 +30,11 @@ export default defineConfig({
               ),
             // The info text: a single document, opened directly.
             S.listItem().title('Info').id('info').child(S.document().schemaType('info').documentId('info').title('Info')),
+            // The sheet's settings: likewise one document.
+            S.listItem()
+              .title('Settings')
+              .id('settings')
+              .child(S.document().schemaType('settings').documentId('settings').title('Settings')),
             // Happenings, newest first.
             S.listItem()
               .title('Happenings')
@@ -42,11 +47,14 @@ export default defineConfig({
 
   schema: {
     types: schemaTypes,
-    // There's only one Info document (it's in the Content list).
-    templates: (templates) => templates.filter((t) => t.schemaType !== 'info'),
+    // There's only one Info document and one Settings document (both are in
+    // the Content list).
+    templates: (templates) => templates.filter((t) => !['info', 'settings'].includes(t.schemaType)),
   },
   document: {
     actions: (actions, {schemaType}) =>
-      schemaType === 'info' ? actions.filter((a) => !['duplicate', 'delete', 'unpublish'].includes(a.action ?? '')) : actions,
+      ['info', 'settings'].includes(schemaType)
+        ? actions.filter((a) => !['duplicate', 'delete', 'unpublish'].includes(a.action ?? ''))
+        : actions,
   },
 })

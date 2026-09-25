@@ -11,7 +11,7 @@
 // screen's shorter side, so a stroke lands in the same place on the sheet on
 // any screen.
 
-import { INK_FADE, INK_LIFESPAN } from './ink.js'
+import { INK_FADE, inkLifespan } from './ink.js'
 
 const FIREBASE_CONFIG = {
   apiKey: 'AIzaSyBlfFi8xlDdOL1YsYiXcCj7CNLEiOk8h60',
@@ -22,7 +22,7 @@ const FIREBASE_CONFIG = {
 }
 
 // How long a stroke lasts (ms), matching the ink's lifespan and fade.
-const STROKE_LIFETIME = (INK_LIFESPAN + INK_FADE) * 1000
+const STROKE_LIFETIME = () => (inkLifespan() + INK_FADE) * 1000
 // How often (ms) a stroke being drawn sends its new points.
 const SEND_EVERY = 50
 // How far behind (ms) other people's live strokes are replayed, so batches
@@ -31,7 +31,7 @@ const PLAY_DELAY = 180
 // A stroke started longer ago than this (ms) when it arrives is drawn at once
 // rather than replayed live — never more than half its life, or a stroke could
 // still be playing back as it fades.
-const LIVE_WINDOW = Math.min(20000, STROKE_LIFETIME / 2)
+const LIVE_WINDOW = () => Math.min(20000, STROKE_LIFETIME() / 2)
 // A live stroke that gets no new points for this long (ms) is finished off
 // (its sender may have closed the page mid-stroke).
 const STALL_TIMEOUT = 8000
@@ -145,7 +145,7 @@ export function createLiveSketch({ element, offset, offsetY = () => 0, pen, penS
       const s = waiting[0]
       if (!s.i) {
         const age = serverNow() - s.t
-        if (!s.points.length || age > STROKE_LIFETIME) {
+        if (!s.points.length || age > STROKE_LIFETIME()) {
           waiting.shift()
           continue
         }
@@ -179,13 +179,13 @@ export function createLiveSketch({ element, offset, offsetY = () => 0, pen, penS
     const data = snap.val()
     if (!data || data.u === clientId || seen.has(id) || data.t < clearedAt) return
     const age = serverNow() - data.t
-    if (age > STROKE_LIFETIME) {
+    if (age > STROKE_LIFETIME()) {
       seen.set(id, true)
       fb.remove(snap.ref).catch(() => {})
       return
     }
     seen.set(id, true)
-    if (data.e || age > LIVE_WINDOW) {
+    if (data.e || age > LIVE_WINDOW()) {
       waiting.push({ points: batchesOf(data).flatMap(([, b]) => decode(b)), t: data.t, style: data.s, i: 0, base: 0 })
       return
     }
@@ -255,7 +255,7 @@ export function createLiveSketch({ element, offset, offsetY = () => 0, pen, penS
   // old), so the database only ever holds the last few minutes.
   const tidy = () => {
     if (!db) return
-    const old = fb.query(fb.ref(db, 'strokes'), fb.orderByChild('t'), fb.endAt(serverNow() - STROKE_LIFETIME - 5000), fb.limitToFirst(50))
+    const old = fb.query(fb.ref(db, 'strokes'), fb.orderByChild('t'), fb.endAt(serverNow() - STROKE_LIFETIME() - 5000), fb.limitToFirst(50))
     fb.get(old)
       .then((snap) => snap.forEach((s) => void fb.remove(s.ref).catch(() => {})))
       .catch(() => {})
@@ -290,7 +290,7 @@ export function createLiveSketch({ element, offset, offsetY = () => 0, pen, penS
         }),
       )
       // Everything from the last STROKE_LIFETIME, then new strokes as they come.
-      const recent = fb.query(fb.ref(db, 'strokes'), fb.orderByChild('t'), fb.startAt(serverNow() - STROKE_LIFETIME))
+      const recent = fb.query(fb.ref(db, 'strokes'), fb.orderByChild('t'), fb.startAt(serverNow() - STROKE_LIFETIME()))
       unsubscribes.push(fb.onChildAdded(recent, onStroke))
       tidy()
       const tidyTimer = setInterval(tidy, 60000)

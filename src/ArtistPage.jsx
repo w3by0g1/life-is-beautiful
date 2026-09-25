@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fetchArtist, imageUrl } from "./sanity.js";
 
 // An artist's page, over the blurred, lightened sheet: their artwork, name and
@@ -9,7 +9,12 @@ import { fetchArtist, imageUrl } from "./sanity.js";
 const formatDate = (date) =>
   date
     ? new Date(`${date}T00:00:00Z`)
-        .toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
+        .toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+          timeZone: "UTC",
+        })
         .toUpperCase()
     : null;
 
@@ -63,7 +68,7 @@ function Listen({ href }) {
   if (!href) return null;
   return (
     <a className="ap-listen" href={href} target="_blank" rel="noreferrer">
-      Listen
+      listen
     </a>
   );
 }
@@ -87,18 +92,26 @@ function Album({ item, artistName }) {
   const tracks = item.tracklist ?? [];
   return (
     <article className="ap-release ap-album">
-      <img className="ap-art" src={imageUrl(item.artwork?.url, 240)} alt={item.artwork?.alt ?? item.title} />
+      <img
+        className="ap-art"
+        src={imageUrl(item.artwork?.url, 240)}
+        alt={item.artwork?.alt ?? item.title}
+      />
       <div>
-        <ReleaseText item={item} kind={tracks.length ? `${tracks.length} track album` : "album"} />
+        <ReleaseText
+          item={item}
+          kind={tracks.length ? `${tracks.length} track album` : "album"}
+        />
         {tracks.length > 0 && (
-          <ol className="ap-tracks">
+          // Ruled off from the notes above, where there are any.
+          <ol className={`ap-tracks${item.description?.length ? " ap-tracks-ruled" : ""}`}>
             {tracks.map((t, i) => (
               <li key={t._key}>
                 {/* A number on a filled dot, as in the design. */}
                 <span className="ap-track-no">
                   <span className="ap-track-dot">{i + 1}</span>
                 </span>
-                <strong>{t.title}</strong> {t.credit || artistName}
+                <strong>{t.title}</strong> <span className="ap-track-by">{t.credit || artistName}</span>
               </li>
             ))}
           </ol>
@@ -108,13 +121,32 @@ function Album({ item, artistName }) {
   );
 }
 
-function Single({ item }) {
+// A single: its artwork beside the writing on its own, or stacked above it
+// when it's one of a row of them (see the grouping below).
+function Single({ item, tile }) {
   return (
-    <article className="ap-release ap-single">
-      <img className="ap-art" src={imageUrl(item.artwork?.url, 170)} alt={item.artwork?.alt ?? item.title} />
+    <article className={`ap-release ap-single${tile ? " ap-single-tile" : ""}`}>
+      <img
+        className="ap-art"
+        src={imageUrl(item.artwork?.url, tile ? 340 : 170)}
+        alt={item.artwork?.alt ?? item.title}
+      />
       <ReleaseText item={item} kind="single" />
     </article>
   );
+}
+
+// Singles that follow one another go in a grid rather than a row each, which
+// would leave most of the page empty. Everything else keeps its own row.
+function groupSingles(content) {
+  const out = [];
+  for (const item of content ?? []) {
+    const last = out[out.length - 1];
+    if (item._type === "single" && last?.singles) last.items.push(item);
+    else if (item._type === "single") out.push({ singles: true, key: item._key, items: [item] });
+    else out.push({ key: item._key, item });
+  }
+  return out;
 }
 
 function MediaItem({ m, width }) {
@@ -144,7 +176,9 @@ function Media({ item }) {
       </div>
     );
   return (
-    <div className={`ap-media ap-media-single ap-align-${item.alignment ?? "center"}`}>
+    <div
+      className={`ap-media ap-media-single ap-align-${item.alignment ?? "center"}`}
+    >
       {items.slice(0, 1).map((m) => (
         <MediaItem key={m._key} m={m} width={340} />
       ))}
@@ -152,17 +186,33 @@ function Media({ item }) {
   );
 }
 
-// Bandcamp and Instagram marks, drawn to sit with the grey text.
-const BandcampIcon = () => (
+// Bandcamp and Instagram marks, drawn to sit with the grey text (also used
+// under the info text; see InfoText.jsx).
+export const BandcampIcon = () => (
   <svg viewBox="0 0 64 28" width="58" height="26" aria-hidden="true">
     <path d="M10 5h16L18 23H2z" fill="currentColor" />
-    <text x="30" y="21" fontFamily="Helvetica Neue, Helvetica, Arial, sans-serif" fontSize="19" fontWeight="500" fill="currentColor">
+    <text
+      x="30"
+      y="21"
+      fontFamily="Helvetica Neue, Helvetica, Arial, sans-serif"
+      fontSize="19"
+      fontWeight="500"
+      fill="currentColor"
+    >
       bc
     </text>
   </svg>
 );
-const InstagramIcon = () => (
-  <svg viewBox="0 0 28 28" width="30" height="30" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2">
+export const InstagramIcon = () => (
+  <svg
+    viewBox="0 0 28 28"
+    width="30"
+    height="30"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+  >
     <rect x="2" y="2" width="24" height="24" rx="7" />
     <circle cx="14" cy="14" r="5.5" />
     <circle cx="21" cy="7" r="1.1" fill="currentColor" stroke="none" />
@@ -192,6 +242,16 @@ export default function ArtistPage({ slug, onClose }) {
 
   const open = Boolean(slug);
   const shown = open && artist?.slug === slug ? artist : null;
+  // What's on the page: the artist asked for once they've loaded, and while
+  // the page closes, whoever was last shown (so they can fade out). Never the
+  // artist before this one — they'd flash up while this one loads.
+  const showing = open ? shown : artist;
+
+  // A new artist starts at the top, not where the last one was scrolled to.
+  const scrollRef = useRef(null);
+  useLayoutEffect(() => {
+    if (shown && scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [shown]);
 
   return (
     <div
@@ -200,18 +260,29 @@ export default function ArtistPage({ slug, onClose }) {
       onClick={(e) => {
         // Clicking the blurred background (not the content) closes it.
         const c = e.target.classList;
-        if (e.target === e.currentTarget || c.contains("ap-scroll") || c.contains("ap-inner")) onClose();
+        if (
+          e.target === e.currentTarget ||
+          c.contains("ap-scroll") ||
+          c.contains("ap-inner")
+        )
+          onClose();
       }}
     >
-      {open && error && !shown && <p className="ap-missing">This artist couldn't be loaded.</p>}
+      {open && error && !shown && (
+        <p className="ap-missing">This artist couldn't be loaded.</p>
+      )}
       {/* Scrolls over the fixed, blurred background, fading out at its top and
           bottom edges. */}
-      <div className="ap-scroll">
-        {artist && (
+      <div className="ap-scroll" ref={scrollRef}>
+        {showing && (
           <div className="ap-inner">
             <aside className="ap-profile">
-              {artist.artwork?.url && (
-                <img className="ap-portrait" src={imageUrl(artist.artwork.url, 520)} alt={artist.artwork.alt ?? artist.name} />
+              {showing.artwork?.url && (
+                <img
+                  className="ap-portrait"
+                  src={imageUrl(showing.artwork.url, 520)}
+                  alt={showing.artwork.alt ?? showing.name}
+                />
               )}
               <a
                 className="ap-back"
@@ -221,34 +292,55 @@ export default function ArtistPage({ slug, onClose }) {
                   onClose();
                 }}
               >
-                <span aria-hidden="true">←</span> {artist.name}
+                <span aria-hidden="true">←</span> {showing.name}
               </a>
               <div className="ap-rich ap-bio">
-                <RichText value={artist.description} />
+                <RichText value={showing.description} />
               </div>
               <div className="ap-links">
-                {artist.bandcamp && (
-                  <a href={artist.bandcamp} target="_blank" rel="noreferrer" aria-label="Bandcamp">
+                {showing.bandcamp && (
+                  <a
+                    href={showing.bandcamp}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Bandcamp"
+                  >
                     <BandcampIcon />
                   </a>
                 )}
-                {artist.instagram && (
-                  <a href={artist.instagram} target="_blank" rel="noreferrer" aria-label="Instagram">
+                {showing.instagram && (
+                  <a
+                    href={showing.instagram}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Instagram"
+                  >
                     <InstagramIcon />
                   </a>
                 )}
               </div>
             </aside>
             <section className="ap-content">
-              {(artist.content ?? []).map((item) =>
-                item._type === "album" ? (
-                  <Album key={item._key} item={item} artistName={artist.name} />
-                ) : item._type === "single" ? (
-                  <Single key={item._key} item={item} />
+              {groupSingles(showing.content).map((group) => {
+                if (group.singles) {
+                  // On its own a single keeps the wide layout; in company they
+                  // share a grid.
+                  if (group.items.length === 1) return <Single key={group.key} item={group.items[0]} />;
+                  return (
+                    <div className="ap-singles" key={group.key}>
+                      {group.items.map((item) => (
+                        <Single key={item._key} item={item} tile />
+                      ))}
+                    </div>
+                  );
+                }
+                const item = group.item;
+                return item._type === "album" ? (
+                  <Album key={group.key} item={item} artistName={showing.name} />
                 ) : item._type === "media" ? (
-                  <Media key={item._key} item={item} />
-                ) : null,
-              )}
+                  <Media key={group.key} item={item} />
+                ) : null;
+              })}
             </section>
           </div>
         )}

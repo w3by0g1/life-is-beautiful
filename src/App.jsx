@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPaperScene } from "./paperScene.js";
 import { artistsLayout, artistsLayoutTall, infoLayout, infoLayoutTall, infoTextWidth, isTall, tallTextLeft, tallTextWidth } from "./layout.js";
 import { ARTISTS } from "./artists.js";
-import { fetchArtists, fetchInfo } from "./sanity.js";
+import { fetchArtists, fetchInfo, fetchSettings } from "./sanity.js";
+import { setInkLifespan } from "./ink.js";
 import ArtistPage from "./ArtistPage.jsx";
 import InfoText from "./InfoText.jsx";
 import HappeningsPage from "./HappeningsPage.jsx";
@@ -10,6 +11,10 @@ import logoUrl from "./assets/logo.jpg";
 import headerLogoUrl from "./assets/header-logo.png";
 
 const NAV = ["artists", "gallery", "happenings", "info"];
+
+// How long (ms) the sheet waits for its settings before going ahead without
+// them.
+const SETTINGS_WAIT = 700;
 
 // Which view the address asks for: "#artists" pans the sheet over and shows
 // the artist list, "#artists/<slug>" opens that artist's page over it,
@@ -74,7 +79,8 @@ function App() {
     textTop: 0,
     left: 0,
   });
-  const [info, setInfo] = useState(INFO_FALLBACK);
+  // The info text, with the marks that go under it (all from Sanity).
+  const [info, setInfo] = useState({ text: INFO_FALLBACK });
   // Whether the sheet has appeared; until it has, the page is the paper's
   // gradient with the title on it.
   const [ready, setReady] = useState(false);
@@ -97,17 +103,31 @@ function App() {
   useEffect(() => {
     let dispose;
     let cancelled = false;
-    createPaperScene(containerRef.current, logoUrl, {
-      panExtent: panExtentRef.current,
-      onReady: () => !cancelled && setReady(true),
-    }).then((d) => {
-      if (cancelled) return d();
-      dispose = d;
-      sceneRef.current = d;
-      d.setRest(restRef.current);
-      d.setPan(...panRef.current);
-      d.setDrawing(viewFromHash() === "home");
-    });
+    // How long a drawing stays is a setting in Sanity, and the ink is timed
+    // from it, so it's read before the sheet is made. If it's slow to answer
+    // the paper doesn't wait: the built-in lifespan stands for this visit.
+    Promise.race([
+      fetchSettings().catch(() => null),
+      new Promise((resolve) => setTimeout(resolve, SETTINGS_WAIT, null)),
+    ])
+      .then((settings) => settings?.strokeMinutes && setInkLifespan(settings.strokeMinutes * 60))
+      .catch(() => {})
+      .then(() => {
+        if (cancelled) return null;
+        return createPaperScene(containerRef.current, logoUrl, {
+          panExtent: panExtentRef.current,
+          onReady: () => !cancelled && setReady(true),
+        });
+      })
+      .then((d) => {
+        if (!d) return;
+        if (cancelled) return d();
+        dispose = d;
+        sceneRef.current = d;
+        d.setRest(restRef.current);
+        d.setPan(...panRef.current);
+        d.setDrawing(viewFromHash() === "home");
+      });
     return () => {
       cancelled = true;
       sceneRef.current = null;
@@ -118,7 +138,7 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     fetchInfo()
-      .then((text) => !cancelled && text?.length && setInfo(text))
+      .then((loaded) => !cancelled && loaded && setInfo({ ...loaded, text: loaded.text?.length ? loaded.text : INFO_FALLBACK }))
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -290,7 +310,7 @@ function App() {
         }
         aria-hidden={view !== "info"}
       >
-        <InfoText value={info} width={layout.infoWidth} />
+        <InfoText value={info.text} width={layout.infoWidth} bandcamp={info.bandcamp} instagram={info.instagram} />
       </div>
       <ArtistPage slug={artistSlug} onClose={() => (window.location.hash = "artists")} />
       <HappeningsPage

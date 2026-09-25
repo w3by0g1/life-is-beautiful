@@ -172,9 +172,20 @@ const PEN_STYLES = {
 }
 
 // Lifespan: seconds each stroke stays at full strength from when it's drawn (0
-// = forever), then how many seconds it takes to fade away.
-export const INK_LIFESPAN = 120
+// = forever), then how many seconds it takes to fade away. The lifespan is a
+// site setting (Sanity; see setInkLifespan), so this is only the fallback.
+let INK_LIFESPAN = 120
 export const INK_FADE = 3
+export const inkLifespan = () => INK_LIFESPAN
+
+// Sets how long a stroke lasts, in seconds. Ink is timed in steps sized from
+// the lifespan (see AGE_STEP), so this is read once, before any ink is laid
+// down — the site fetches the setting before the scene is made.
+export function setInkLifespan(seconds) {
+  if (!(seconds > 0) || seconds === INK_LIFESPAN) return
+  INK_LIFESPAN = seconds
+  AGE_STEP = ageStepFor(INK_LIFESPAN)
+}
 // Bleeding: after ink lands it slowly spreads into the paper as a pale,
 // diluted halo (how far and how strongly is the pen's; see PEN_STYLES). It
 // creeps over BLEED_TIME seconds, fast at first then slowing, in faint layers
@@ -198,7 +209,8 @@ const DIR_REACH = 6
 // count nears 255 everything is shifted down (see `rebase`); the 120 steps kept
 // cover lifespan + fade with room to spare. Every spot of a stroke gets the
 // step it began in, so the whole stroke fades at once.
-const AGE_STEP = Math.max(0.02, (INK_LIFESPAN + INK_FADE + 4) / 120)
+const ageStepFor = (lifespan) => Math.max(0.02, (lifespan + INK_FADE + 10) / 120)
+let AGE_STEP = ageStepFor(INK_LIFESPAN)
 
 export function createInk() {
   const canvas = document.createElement('canvas')

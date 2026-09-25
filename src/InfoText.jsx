@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+import { BandcampIcon, InstagramIcon } from "./ArtistPage.jsx";
 
 // The info text (#info), set word by word so it can blur into focus a line at
 // a time, like the artist names. Which line each word falls on is only known
@@ -36,8 +37,9 @@ function Word({ word }) {
   return <span className="info-word">{node}</span>;
 }
 
-// value: the rich text; width: its column (re-measured when it changes).
-export default function InfoText({ value, width }) {
+// value: the rich text; width: its column (re-measured when it changes);
+// bandcamp/instagram: links, shown as marks under the text.
+export default function InfoText({ value, width, bandcamp, instagram }) {
   const ref = useRef(null);
   const paragraphs = wordsOf(value);
 
@@ -56,6 +58,8 @@ export default function InfoText({ value, width }) {
         }
         word.style.setProperty("--i", line);
       }
+      // The marks follow the last line in.
+      el.querySelector(".info-links")?.style.setProperty("--i", line + 1);
     };
     measure();
     window.addEventListener("resize", measure);
@@ -71,6 +75,20 @@ export default function InfoText({ value, width }) {
           {words.map((word) => (word.text.trim() ? <Word key={word.key} word={word} /> : " "))}
         </p>
       ))}
+      {(bandcamp || instagram) && (
+        <div className="ap-links info-links">
+          {bandcamp && (
+            <a href={bandcamp} target="_blank" rel="noreferrer" aria-label="Bandcamp">
+              <BandcampIcon />
+            </a>
+          )}
+          {instagram && (
+            <a href={instagram} target="_blank" rel="noreferrer" aria-label="Instagram">
+              <InstagramIcon />
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -86,7 +86,7 @@ body {
   font-size: clamp(34px, 7vw, 64px);
   font-weight: 350;
   letter-spacing: -0.08em;
-  color: #1a1a1a;
+  color: #434a47;
   mix-blend-mode: multiply;
   pointer-events: none;
   transition: opacity 0.6s ease;
@@ -132,7 +132,7 @@ body {
   font-size: 16px;
   font-weight: 350;
   letter-spacing: -0.08em;
-  color: #111;
+  color: #434a47;
 }
 
 .site-header a {
@@ -200,7 +200,7 @@ body {
   font-weight: 350;
   line-height: 32px;
   letter-spacing: -0.08em;
-  color: #1a1a1a;
+  color: #434a47;
   mix-blend-mode: multiply;
   white-space: nowrap;
   pointer-events: none;
@@ -278,7 +278,7 @@ body {
   font-weight: 350;
   line-height: 1.65;
   letter-spacing: -0.08em;
-  color: #2a2a2a;
+  color: #434a47;
   mix-blend-mode: multiply;
   pointer-events: none;
 }
@@ -308,6 +308,33 @@ body {
 
 .info-text p {
   margin: 0 0 1em;
+}
+
+/* The Bandcamp and Instagram marks under the text, coming in after its last
+   line (their line number is set in InfoText.jsx). */
+.info-links {
+  margin-top: 22px;
+  opacity: 0;
+  filter: blur(6px);
+  transition:
+    opacity 0.35s ease,
+    filter 0.35s ease;
+}
+
+.info-text.open .info-links {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity 0.7s ease calc(0.4s + var(--i, 0) * 0.06s),
+    filter 0.9s ease calc(0.4s + var(--i, 0) * 0.06s);
+}
+
+.info-links a {
+  color: #444;
+}
+
+.info-links a:hover {
+  color: #434a47;
 }
 
 .info-text strong {
@@ -400,18 +427,20 @@ body {
   padding: 124px 100px 96px;
   padding-top: calc(124px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
   opacity: 0;
-  transform: translateY(8px);
+  /* Blurs into focus, like the artist names and the info text; it doesn't
+     travel. */
+  filter: blur(7px);
   transition:
     opacity 0.5s ease,
-    transform 0.6s ease;
+    filter 0.5s ease;
 }
 
 .artist-page.loaded .ap-inner {
   opacity: 1;
-  transform: none;
+  filter: blur(0);
   transition:
     opacity 0.6s ease 0.1s,
-    transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s;
+    filter 0.8s ease 0.1s;
 }
 
 .ap-missing {
@@ -442,7 +471,7 @@ body {
   font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 23px;
   letter-spacing: 0;
-  color: #222;
+  color: #434a47;
   text-decoration: none;
 }
 
@@ -492,7 +521,7 @@ body {
 }
 
 .ap-links a:hover {
-  color: #222;
+  color: #434a47;
 }
 
 .ap-links svg {
@@ -520,6 +549,34 @@ body {
   grid-template-columns: 166px minmax(0, 1fr);
 }
 
+/* Singles that follow one another, three across, each stacked: artwork over
+   its title and details (see ArtistPage.jsx). */
+.ap-singles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.ap-singles .ap-single-tile {
+  display: block;
+}
+
+.ap-singles .ap-art {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+/* A third of the column takes a smaller title. */
+.ap-singles .ap-release-head h3 {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.ap-singles .ap-release-head {
+  gap: 10px;
+}
+
 .ap-art {
   display: block;
   width: 100%;
@@ -541,14 +598,14 @@ body {
   font-weight: 400;
   line-height: 1.05;
   letter-spacing: -0.01em;
-  color: #222;
+  color: #434a47;
 }
 
 .ap-listen {
   flex: none;
   margin-top: 4px;
   padding: 1px 5px 2px;
-  background: #1a1a1a;
+  background: #434a47;
   color: #fff;
   font-family: 'Rigid Square Arrows', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 15px;
@@ -588,7 +645,15 @@ body {
   padding: 0;
   list-style: none;
   font-size: 15px;
-  line-height: 22px;
+  line-height: 24px;
+}
+
+/* Under the release's notes, a rule between them and the tracks, with the
+   same air above it as below. */
+.ap-tracks-ruled {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(67, 74, 71, 0.25);
 }
 
 /* Wrapped lines hang under the title, not the number. */
@@ -600,6 +665,11 @@ body {
 .ap-tracks strong {
   font-weight: 500;
   color: #666;
+}
+
+/* Who the track is by sits back from its title. */
+.ap-track-by {
+  color: #9b9b9b;
 }
 
 .ap-track-no {
@@ -743,7 +813,7 @@ body {
   font-size: 32px;
   font-weight: 350;
   letter-spacing: -0.08em;
-  color: #222;
+  color: #434a47;
 }
 
 .hp-grid {
@@ -841,7 +911,7 @@ body {
   transform: scale(1.08);
   box-shadow:
     0 10px 26px rgba(0, 0, 0, 0.22),
-    0 0 0 1px #222;
+    0 0 0 1px #434a47;
 }
 
 /* On a desktop, hovering one does the same. */
@@ -854,7 +924,7 @@ body {
 }
 
 .hp-day.chosen {
-  box-shadow: 0 0 0 1px #222;
+  box-shadow: 0 0 0 1px #434a47;
 }
 
 .hp-day img {
@@ -869,7 +939,7 @@ body {
   right: 4px;
   bottom: 4px;
   padding: 1px 4px;
-  background: #1a1a1a;
+  background: #434a47;
   color: #fff;
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 11px;
@@ -897,7 +967,7 @@ body {
   font-weight: 400;
   line-height: 1.15;
   letter-spacing: -0.01em;
-  color: #111;
+  color: #434a47;
 }
 
 /* Back to the calendar, before the event's title. */
@@ -922,7 +992,7 @@ body {
 
 .hp-details .ap-meta {
   margin: 0 0 8px;
-  color: #1a1a1a;
+  color: #434a47;
 }
 
 .hp-lineup {
@@ -933,7 +1003,7 @@ body {
   -webkit-line-clamp: 3;
   font-size: 15px;
   line-height: 18px;
-  color: #1a1a1a;
+  color: #434a47;
 }
 
 .hp-lineup a {
@@ -980,6 +1050,12 @@ body {
   .ap-album,
   .ap-single {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Two across rather than three, with the narrow column. */
+  .ap-singles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
   }
 
   .ap-art {

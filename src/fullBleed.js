@@ -41,13 +41,18 @@ export function fullBleed() {
   }
   // Keeps the page scrolled to exactly the overhang: the browser can reset or
   // shift the scroll (on load, returning to the tab, its bars changing), so
-  // it's put back whenever it drifts.
+  // it's put back whenever it drifts. Never while a finger is down, though:
+  // scrolling something on top of the sheet (an artist's page, the calendar)
+  // can drag the page along with it, and putting it back mid-gesture makes
+  // whatever is being read jump about. It's put right once the finger lifts.
   let queued = false
+  let touching = false
   const hold = () => {
-    if (queued) return
+    if (queued || touching) return
     queued = true
     requestAnimationFrame(() => {
       queued = false
+      if (touching) return
       if (Math.abs(scrollY - overhang) > 0.5) scrollTo(0, overhang)
     })
   }
@@ -59,11 +64,25 @@ export function fullBleed() {
   const events = ['resize', 'pageshow', 'load', 'scroll', 'orientationchange']
   for (const type of events) addEventListener(type, apply, { passive: true })
   document.addEventListener('visibilitychange', apply)
+  const down = () => {
+    touching = true
+  }
+  // A moment after the last finger leaves, so the scroll it threw has settled.
+  const up = () => {
+    touching = false
+    setTimeout(apply, 260)
+  }
+  addEventListener('touchstart', down, { passive: true })
+  addEventListener('touchend', up, { passive: true })
+  addEventListener('touchcancel', up, { passive: true })
   // The page may not be laid out at full height yet on the first frames.
   const retries = [100, 400, 1000, 2500].map((ms) => setTimeout(apply, ms))
   return () => {
     for (const type of events) removeEventListener(type, apply)
     document.removeEventListener('visibilitychange', apply)
+    removeEventListener('touchstart', down)
+    removeEventListener('touchend', up)
+    removeEventListener('touchcancel', up)
     retries.forEach(clearTimeout)
   }
 }
