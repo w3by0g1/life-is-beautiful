@@ -30,6 +30,11 @@ export default defineConfig({
               ),
             // The info text: a single document, opened directly.
             S.listItem().title('Info').id('info').child(S.document().schemaType('info').documentId('info').title('Info')),
+            // The gallery's images: likewise one document.
+            S.listItem()
+              .title('Gallery')
+              .id('gallery')
+              .child(S.document().schemaType('gallery').documentId('gallery').title('Gallery')),
             // The sheet's settings: likewise one document.
             S.listItem()
               .title('Settings')
@@ -47,13 +52,13 @@ export default defineConfig({
 
   schema: {
     types: schemaTypes,
-    // There's only one Info document and one Settings document (both are in
-    // the Content list).
-    templates: (templates) => templates.filter((t) => !['info', 'settings'].includes(t.schemaType)),
+    // Info, Gallery and Settings are one document each (all in the Content
+    // list), so there's nothing to create.
+    templates: (templates) => templates.filter((t) => !['info', 'gallery', 'settings'].includes(t.schemaType)),
   },
   document: {
     actions: (actions, {schemaType}) =>
-      ['info', 'settings'].includes(schemaType)
+      ['info', 'gallery', 'settings'].includes(schemaType)
         ? actions.filter((a) => !['duplicate', 'delete', 'unpublish'].includes(a.action ?? ''))
         : actions,
   },

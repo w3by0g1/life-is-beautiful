@@ -214,20 +214,9 @@ body {
   white-space: normal;
 }
 
-/* There they run on as one centred paragraph, separated by dots, rather than
-   standing one to a line: a phone has the width for it and not the height.
-   (Hovering doesn't bold them there, which would shuffle the line along.) */
+/* There they stand one to a line, each centred. */
 .artists.tall li {
-  display: inline;
-}
-
-.artists.tall li:not(:last-child)::after {
-  content: ' · ';
-  font-weight: 400;
-}
-
-.artists.tall.open li:hover {
-  font-weight: inherit;
+  margin-right: auto;
 }
 
 /* There the info text sits below the logo, from its top edge. */
@@ -497,8 +486,13 @@ body {
   color: #5c5c5c;
 }
 
+/* Links in the writing, including addresses typed out in it. */
 .ap-rich a {
-  color: inherit;
+  color: #2a4ecb;
+}
+
+.ap-rich a:hover {
+  color: #1c3696;
 }
 
 .ap-bio {

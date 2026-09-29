@@ -1,6 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPaperScene } from "./paperScene.js";
-import { artistsLayout, artistsLayoutTall, infoLayout, infoLayoutTall, infoTextWidth, isTall, tallTextLeft, tallTextWidth } from "./layout.js";
+import {
+  artistsLayout,
+  artistsLayoutTall,
+  infoLayout,
+  infoLayoutTall,
+  infoTextWidth,
+  isTall,
+  tallTextLeft,
+  tallTextWidth,
+} from "./layout.js";
 import { ARTISTS } from "./artists.js";
 import { fetchArtists, fetchInfo, fetchSettings } from "./sanity.js";
 import { setInkLifespan } from "./ink.js";
@@ -10,7 +19,7 @@ import HappeningsPage from "./HappeningsPage.jsx";
 import logoUrl from "./assets/logo.jpg";
 import headerLogoUrl from "./assets/header-logo.png";
 
-const NAV = ["artists", "gallery", "happenings", "info"];
+const NAV = ["home", "artists", "gallery", "happenings", "info"];
 
 // How long (ms) the sheet waits for its settings before going ahead without
 // them.
@@ -22,7 +31,8 @@ const SETTINGS_WAIT = 700;
 // shows the info text; anything else is the plain sheet.
 // The header link the address belongs to ("#artists/aloisius" → "artists"),
 // whether or not there's a view behind it yet.
-const sectionFromHash = () => window.location.hash.replace(/^#/, "").split("/")[0];
+const sectionFromHash = () =>
+  window.location.hash.replace(/^#/, "").split("/")[0];
 
 const viewFromHash = () => {
   const h = window.location.hash;
@@ -47,6 +57,20 @@ const INFO_FALLBACK = [
     ],
   },
 ];
+// Back to the plain sheet. Not by going to "#": the browser scrolls to the
+// top for that, and on a phone the page is kept scrolled down behind the
+// status bar (see fullBleed.js), so the sheet would jump for a frame before
+// being put back. The address loses its hash without a scroll instead.
+const goHome = () => {
+  if (!window.location.hash) return;
+  history.pushState(
+    null,
+    "",
+    window.location.pathname + window.location.search,
+  );
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+};
+
 const artistFromHash = () => {
   const m = window.location.hash.match(/^#artists\/(.+)$/);
   return m ? decodeURIComponent(m[1]) : null;
@@ -61,7 +85,9 @@ function App() {
   const [section, setSection] = useState(sectionFromHash);
   const [artistSlug, setArtistSlug] = useState(artistFromHash);
   // The artists, from Sanity once loaded (the built-in list until then).
-  const [artists, setArtists] = useState(() => ARTISTS.map((name) => ({ name, slug: name })));
+  const [artists, setArtists] = useState(() =>
+    ARTISTS.map((name) => ({ name, slug: name })),
+  );
   // Where the list and the info text sit (fixed-position CSS) and how far the
   // sheet pans so the logo makes room for them: beside them on a wide screen,
   // and above or below them on a narrow one (`tall`; see layout.js).
@@ -90,8 +116,14 @@ function App() {
   const [eventShown, setEventShown] = useState(false);
   const calendarBack = useRef(null);
   const open = view === "artists" ? "artists" : view === "info" ? "info" : null;
-  const panX = !open || layout.tall ? 0 : open === "artists" ? layout.pan : layout.infoPan;
-  const panY = !open || !layout.tall ? 0 : open === "artists" ? layout.artistsPanY : layout.infoPanY;
+  const panX =
+    !open || layout.tall ? 0 : open === "artists" ? layout.pan : layout.infoPan;
+  const panY =
+    !open || !layout.tall
+      ? 0
+      : open === "artists"
+        ? layout.artistsPanY
+        : layout.infoPanY;
   const panRef = useRef([panX, panY]);
   // Where the sheet rests (see the layout below), kept for the scene when it
   // is made.
@@ -110,7 +142,11 @@ function App() {
       fetchSettings().catch(() => null),
       new Promise((resolve) => setTimeout(resolve, SETTINGS_WAIT, null)),
     ])
-      .then((settings) => settings?.strokeMinutes && setInkLifespan(settings.strokeMinutes * 60))
+      .then(
+        (settings) =>
+          settings?.strokeMinutes &&
+          setInkLifespan(settings.strokeMinutes * 60),
+      )
       .catch(() => {})
       .then(() => {
         if (cancelled) return null;
@@ -138,7 +174,15 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     fetchInfo()
-      .then((loaded) => !cancelled && loaded && setInfo({ ...loaded, text: loaded.text?.length ? loaded.text : INFO_FALLBACK }))
+      .then(
+        (loaded) =>
+          !cancelled &&
+          loaded &&
+          setInfo({
+            ...loaded,
+            text: loaded.text?.length ? loaded.text : INFO_FALLBACK,
+          }),
+      )
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -151,7 +195,9 @@ function App() {
       .then((list) => {
         if (!cancelled && list?.length) setArtists(list);
       })
-      .catch((err) => console.warn("Could not load the artists from Sanity:", err));
+      .catch((err) =>
+        console.warn("Could not load the artists from Sanity:", err),
+      );
     return () => {
       cancelled = true;
     };
@@ -168,7 +214,7 @@ function App() {
     const onKey = (e) => {
       if (e.key !== "Escape") return;
       if (artistFromHash()) window.location.hash = "artists";
-      else if (viewFromHash() !== "home") window.location.hash = "";
+      else if (viewFromHash() !== "home") goHome();
     };
     window.addEventListener("hashchange", onHash);
     window.addEventListener("keydown", onKey);
@@ -189,8 +235,16 @@ function App() {
       // The text is measured as it will be set, for the room it needs below
       // the logo.
       if (infoRef.current) infoRef.current.style.width = `${infoWidth}px`;
-      const { pan, listRight } = artistsLayout(r.width, r.height, listRef.current.offsetWidth);
-      const { pan: infoPan, textLeft } = infoLayout(r.width, r.height, infoWidth);
+      const { pan, listRight } = artistsLayout(
+        r.width,
+        r.height,
+        listRef.current.offsetWidth,
+      );
+      const { pan: infoPan, textLeft } = infoLayout(
+        r.width,
+        r.height,
+        infoWidth,
+      );
       // What of the sheet is on screen, in the scene's own coordinates: it
       // starts above the top of the screen on phones (see fullBleed.js), the
       // header covers its first stretch, and a phone browser's bar floats over
@@ -202,8 +256,18 @@ function App() {
       sceneRef.current?.setRest(restY);
       restRef.current = restY;
       const rest = r.height / 2 + restY;
-      const { middle: artistsMiddle, listBottom } = artistsLayoutTall(r.width, r.height, listRef.current.offsetHeight, view);
-      const { middle: infoMiddle, textTop } = infoLayoutTall(r.width, r.height, infoRef.current?.offsetHeight ?? 0, view);
+      const { middle: artistsMiddle, listBottom } = artistsLayoutTall(
+        r.width,
+        r.height,
+        listRef.current.offsetHeight,
+        view,
+      );
+      const { middle: infoMiddle, textTop } = infoLayoutTall(
+        r.width,
+        r.height,
+        infoRef.current?.offsetHeight ?? 0,
+        view,
+      );
       const artistsPanY = artistsMiddle - rest;
       const infoPanY = infoMiddle - rest;
       panExtentRef.current = tall
@@ -255,9 +319,6 @@ function App() {
         life is beautiful
       </div>
       <header className={`site-header${ready ? " ready" : ""}`}>
-        <a className="site-logo" href="#" aria-label="Home">
-          <img src={headerLogoUrl} alt="" />
-        </a>
         <nav>
           {NAV.map((item) => (
             <a
@@ -272,8 +333,9 @@ function App() {
                 // filling the screen, back to the calendar).
                 if (view === item && !artistSlug) {
                   e.preventDefault();
-                  if (item === "happenings" && eventShown) calendarBack.current?.();
-                  else window.location.hash = "";
+                  if (item === "happenings" && eventShown)
+                    calendarBack.current?.();
+                  else goHome();
                 }
               }}
             >
@@ -287,14 +349,21 @@ function App() {
         className={`artists${view === "artists" ? " open" : ""}${layout.tall ? " tall" : ""}${ready ? " ready" : ""}`}
         style={
           layout.tall
-            ? { left: layout.left, width: layout.infoWidth, top: layout.listBottom }
+            ? {
+                left: layout.left,
+                width: layout.infoWidth,
+                top: layout.listBottom,
+              }
             : { right: layout.right, top: layout.top }
         }
         aria-hidden={view !== "artists"}
       >
         {artists.map(({ name, slug }, i) => (
           <li key={slug ?? name} style={{ "--i": i }}>
-            <a href={`#artists/${encodeURIComponent(slug ?? name)}`} tabIndex={view === "artists" ? 0 : -1}>
+            <a
+              href={`#artists/${encodeURIComponent(slug ?? name)}`}
+              tabIndex={view === "artists" ? 0 : -1}
+            >
               {name}
             </a>
           </li>
@@ -305,18 +374,36 @@ function App() {
         className={`info-text${view === "info" ? " open" : ""}${layout.tall ? " tall" : ""}${ready ? " ready" : ""}`}
         style={
           layout.tall
-            ? { left: layout.left, top: layout.textTop, width: layout.infoWidth }
-            : { left: layout.infoLeft, top: layout.top, width: layout.infoWidth }
+            ? {
+                left: layout.left,
+                top: layout.textTop,
+                width: layout.infoWidth,
+              }
+            : {
+                left: layout.infoLeft,
+                top: layout.top,
+                width: layout.infoWidth,
+              }
         }
         aria-hidden={view !== "info"}
       >
-        <InfoText value={info.text} width={layout.infoWidth} bandcamp={info.bandcamp} instagram={info.instagram} />
+        <InfoText
+          value={info.text}
+          width={layout.infoWidth}
+          bandcamp={info.bandcamp}
+          instagram={info.instagram}
+        />
       </div>
-      <ArtistPage slug={artistSlug} onClose={() => (window.location.hash = "artists")} />
+      <ArtistPage
+        slug={artistSlug}
+        onClose={() => (window.location.hash = "artists")}
+      />
       <HappeningsPage
         open={view === "happenings"}
-        onClose={() => (window.location.hash = "")}
-        onArtist={(slug) => (window.location.hash = `artists/${encodeURIComponent(slug)}`)}
+        onClose={goHome}
+        onArtist={(slug) =>
+          (window.location.hash = `artists/${encodeURIComponent(slug)}`)
+        }
         onEventShown={setEventShown}
         backRef={calendarBack}
       />

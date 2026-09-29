@@ -50,5 +50,9 @@ export const fetchEvents = () =>
 // The info text (#info).
 export const fetchInfo = () => sanityQuery(`*[_id == "info"][0] { text, bandcamp, instagram }`)
 
+// The gallery's images, in the order set in the studio.
+export const fetchGallery = () =>
+  sanityQuery(`*[_id == "gallery"][0].images[] { _key, alt, caption, credit, "url": asset->url, "aspect": asset->metadata.dimensions.aspectRatio }`)
+
 // The sheet's settings (how long a drawing stays, in minutes).
 export const fetchSettings = () => sanityQuery(`*[_id == "settings"][0] { strokeMinutes }`)

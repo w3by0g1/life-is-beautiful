@@ -18,6 +18,30 @@ const formatDate = (date) =>
         .toUpperCase()
     : null;
 
+// A web address written out in the text — with or without its http(s):// —
+// so notes pasted in as plain text are still worth tapping.
+const WEB_ADDRESS = /((?:https?:\/\/|www\.)[^\s<>]+|(?:[a-z0-9][a-z0-9-]*\.)+[a-z]{2,}\/[^\s<>]*)/gi;
+
+// Text with any addresses in it turned into links.
+function linkify(text, keyPrefix) {
+  const parts = (text ?? "").split(WEB_ADDRESS);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    // The odd parts are the addresses (they're what the pattern captured).
+    if (i % 2 === 0 || !part) return part;
+    // Punctuation at the end belongs to the sentence, not the address.
+    const [, address, tail] = part.match(/^(.*?)([.,;:!?)]*)$/);
+    return (
+      <span key={`${keyPrefix}-${i}`}>
+        <a href={/^https?:\/\//i.test(address) ? address : `https://${address}`} target="_blank" rel="noreferrer">
+          {address}
+        </a>
+        {tail}
+      </span>
+    );
+  });
+}
+
 // Sanity rich text: paragraphs with bold, italic and links.
 export function RichText({ value }) {
   if (!value?.length) return null;
@@ -25,8 +49,10 @@ export function RichText({ value }) {
     if (block._type !== "block") return null;
     return (
       <p key={block._key}>
-        {block.children?.map((span) => {
-          let node = span.text;
+        {block.children?.map((span, si) => {
+          // A span that's already a link keeps its own address.
+          const linked = (span.marks ?? []).some((m) => block.markDefs?.some((d) => d._key === m && d.href));
+          let node = linked ? span.text : linkify(span.text, span._key ?? si);
           for (const mark of span.marks ?? []) {
             if (mark === "strong") node = <strong>{node}</strong>;
             else if (mark === "em") node = <em>{node}</em>;
@@ -40,7 +66,7 @@ export function RichText({ value }) {
                 );
             }
           }
-          return <span key={span._key}>{node}</span>;
+          return <span key={span._key ?? si}>{node}</span>;
         })}
       </p>
     );
