@@ -16,10 +16,11 @@ import { setInkLifespan } from "./ink.js";
 import ArtistPage from "./ArtistPage.jsx";
 import InfoText from "./InfoText.jsx";
 import HappeningsPage from "./HappeningsPage.jsx";
+import ContactPage from "./ContactPage.jsx";
 import logoUrl from "./assets/logo.jpg";
 import headerLogoUrl from "./assets/header-logo.png";
 
-const NAV = ["home", "artists", "gallery", "happenings", "info"];
+const NAV = ["home", "artists", "gallery", "happenings", "info", "contact"];
 
 // How long (ms) the sheet waits for its settings before going ahead without
 // them.
@@ -28,7 +29,8 @@ const SETTINGS_WAIT = 700;
 // Which view the address asks for: "#artists" pans the sheet over and shows
 // the artist list, "#artists/<slug>" opens that artist's page over it,
 // "#happenings" shows the calendar, "#info" pans the sheet the other way and
-// shows the info text; anything else is the plain sheet.
+// shows the info text, "#contact" shows the contact form; anything else is
+// the plain sheet.
 // The header link the address belongs to ("#artists/aloisius" → "artists"),
 // whether or not there's a view behind it yet.
 const sectionFromHash = () =>
@@ -39,6 +41,7 @@ const viewFromHash = () => {
   if (h.startsWith("#artists")) return "artists";
   if (h === "#happenings") return "happenings";
   if (h === "#info") return "info";
+  if (h === "#contact") return "contact";
   return "home";
 };
 
@@ -304,8 +307,8 @@ function App() {
     sceneRef.current?.setPan(panX, panY);
   }, [panX, panY]);
 
-  // No drawing while the artists or the calendar are showing: the ink fades
-  // out, and back in on leaving.
+  // No drawing while the artists, the calendar or the contact form are
+  // showing: the ink fades out, and back in on leaving.
   useEffect(() => {
     sceneRef.current?.setDrawing(view === "home");
   }, [view]);
@@ -407,6 +410,7 @@ function App() {
         onEventShown={setEventShown}
         backRef={calendarBack}
       />
+      <ContactPage open={view === "contact"} onClose={goHome} />
     </>
   );
 }

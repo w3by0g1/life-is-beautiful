@@ -169,6 +169,14 @@ body {
   font-weight: 500;
 }
 
+/* On a phone the six links only fit across set a little smaller and closer. */
+@media (max-width: 480px) {
+  .site-header nav {
+    gap: clamp(8px, 3vw, 18px);
+    font-size: clamp(13px, 3.8vw, 16px);
+  }
+}
+
 .site-header nav a::after {
   content: attr(data-label);
   display: block;
@@ -1020,6 +1028,104 @@ body {
 .hp-empty {
   margin: 0;
   font-size: 17px;
+}
+
+/* The contact form (#contact; see ContactPage.jsx): a subject and a message,
+   one column in the middle of the artist page's blurred background. The
+   fields are lines ruled on the wash rather than boxes. */
+.ct-inner {
+  display: flex;
+  justify-content: center;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding-top: calc(160px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
+}
+
+.ct-form {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  color: #434a47;
+}
+
+.ct-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ct-field span {
+  font-family: 'Rigid Square Arrows', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  color: #888;
+}
+
+.ct-field input,
+.ct-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 0 8px;
+  border: 0;
+  border-bottom: 1px solid rgba(67, 74, 71, 0.35);
+  border-radius: 0;
+  background: transparent;
+  color: #434a47;
+  /* 16px or more, or a phone zooms in on the field when it's tapped. */
+  font: inherit;
+  font-size: 19px;
+  line-height: 1.5;
+  letter-spacing: -0.04em;
+  outline: none;
+  transition: border-color 0.2s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.ct-field textarea {
+  resize: vertical;
+  min-height: 8em;
+}
+
+.ct-field input:focus,
+.ct-field textarea:focus {
+  border-bottom-color: #434a47;
+}
+
+.ct-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.ct-send {
+  border: 0;
+  cursor: pointer;
+}
+
+.ct-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ct-sent p,
+.ct-error {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.5;
+}
+
+.ct-error {
+  font-size: 15px;
+  color: #8a3b32;
+}
+
+.ct-error a {
+  color: inherit;
 }
 
 /* Narrow screens: one column, profile first. */
