@@ -1,4 +1,5 @@
 import {defineArrayMember, defineField, defineType} from 'sanity'
+import {GalleryImagesInput} from '../components/GalleryImagesInput'
 
 // The gallery (#gallery): a collection of images, shown in the order set here.
 // There's just one.
@@ -10,8 +11,10 @@ export const gallery = defineType({
     defineField({
       name: 'images',
       title: 'Images',
-      description: 'Shown in this order; drag to rearrange.',
+      description:
+        'Shown in this order; drag to rearrange. Upload several at once with the button (or drop them here), then click each to add its details.',
       type: 'array',
+      components: {input: GalleryImagesInput},
       of: [
         defineArrayMember({
           name: 'photo',
@@ -22,7 +25,7 @@ export const gallery = defineType({
             defineField({
               name: 'alt',
               title: 'Alternative text',
-              description: 'What the image shows, for anyone who can\'t see it.',
+              description: "What the image shows, for anyone who can't see it.",
               type: 'string',
             }),
             defineField({
@@ -34,15 +37,26 @@ export const gallery = defineType({
             defineField({
               name: 'credit',
               title: 'Credit',
-              description: 'e.g. a photographer\'s name.',
+              description: "e.g. a photographer's name.",
               type: 'string',
             }),
           ],
+          // Freshly uploaded images say so until their details are added.
           preview: {
-            select: {media: 'asset', title: 'caption', subtitle: 'credit'},
-            prepare: ({media, title, subtitle}: {media?: unknown; title?: string; subtitle?: string}) => ({
-              title: title || 'Image',
+            select: {media: 'asset', title: 'caption', subtitle: 'credit', alt: 'alt'},
+            prepare: ({
+              media,
+              title,
               subtitle,
+              alt,
+            }: {
+              media?: unknown
+              title?: string
+              subtitle?: string
+              alt?: string
+            }) => ({
+              title: title || alt || 'Image',
+              subtitle: subtitle || (title || alt ? undefined : 'No details yet'),
               media: media as never,
             }),
           },

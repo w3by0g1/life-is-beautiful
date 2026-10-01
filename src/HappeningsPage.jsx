@@ -74,10 +74,49 @@ function Lineup({ lineup, onArtist }) {
   );
 }
 
+// The poster sizes the calendar's cells and the details load them at.
+const THUMB_W = 120;
+const POSTER_W = 400;
+
+// Starts a poster downloading (once), so it's ready by the time it's opened:
+// a day's poster is fetched when the pointer comes over it.
+const preloaded = new Set();
+const preload = (url) => {
+  if (!url || preloaded.has(url)) return;
+  preloaded.add(url);
+  const img = new Image();
+  img.decoding = "async";
+  img.src = url;
+};
+
+// An event's poster: its space is kept from the start (from its proportions),
+// with the calendar's small copy of it (already loaded) blurred in that space
+// until the full one has loaded and fades in over it.
+function Poster({ poster, alt }) {
+  const [loaded, setLoaded] = useState(false);
+  const full = imageUrl(poster.url, POSTER_W);
+  return (
+    <div className={`hp-poster${loaded ? " loaded" : ""}`} style={{ "--ar": poster.aspect ?? 0.75 }}>
+      <img className="hp-poster-thumb" src={imageUrl(poster.url, THUMB_W)} alt="" aria-hidden="true" />
+      <img
+        className="hp-poster-full"
+        // Already in the cache (preloaded, or seen before): shown at once.
+        ref={(el) => {
+          if (el?.complete && el.naturalWidth) setLoaded(true);
+        }}
+        src={full}
+        alt={alt}
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+      />
+    </div>
+  );
+}
+
 function EventDetails({ event, onArtist, onBack }) {
   return (
     <div className="hp-details" key={event._id}>
-      {event.poster?.url && <img className="hp-poster" src={imageUrl(event.poster.url, 400)} alt={event.poster.alt ?? event.title} />}
+      {event.poster?.url && <Poster poster={event.poster} alt={event.poster.alt ?? event.title} />}
       <h2>
         <button type="button" className="hp-back" onClick={onBack} aria-label="Back to the calendar">
           <span aria-hidden="true">←</span>
@@ -111,6 +150,14 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
     return { y: t.getFullYear(), m: t.getMonth() };
   });
   const [chosenId, setChosenId] = useState(null);
+  // Coming back to the calendar starts with no event chosen. (Cleared as it
+  // opens rather than as it closes, so the details don't fold away while the
+  // page is still fading out.)
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setChosenId(null);
+  }
   const scrollRef = useRef(null);
   const monthsRef = useRef(null);
 
@@ -216,6 +263,7 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
               key={date}
               className={`hp-day${past ? " past" : ""}${ev ? " has-event" : ""}${isChosen ? " chosen" : ""}`}
               disabled={!ev}
+              onPointerEnter={() => dayEvents.forEach((e) => preload(imageUrl(e.poster?.url, POSTER_W)))}
               onClick={() => {
                 if (!ev) return;
                 // Clicking a day steps through its events, then puts the
@@ -225,7 +273,7 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
               }}
               aria-label={ev ? `${ev.title}, ${formatDate(date)}` : undefined}
             >
-              {ev?.poster?.url ? <img src={imageUrl(ev.poster.url, 120)} alt="" loading="lazy" /> : <span className="hp-daynum">{d}</span>}
+              {ev?.poster?.url ? <img src={imageUrl(ev.poster.url, THUMB_W)} alt="" loading="lazy" /> : <span className="hp-daynum">{d}</span>}
               {dayEvents.length > 1 && <span className="hp-more">+{dayEvents.length - 1}</span>}
             </button>
           );

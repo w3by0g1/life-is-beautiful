@@ -762,14 +762,31 @@ body {
    jumping). */
 .hp-side {
   position: sticky;
-  top: 120px;
+  top: 0;
   align-self: flex-start;
   width: 0;
-  overflow: hidden;
+  /* The full height of the screen, from its very top (pulled up over the
+     page's top padding), with the details starting just under the header: a
+     long description scrolls inside, and what scrolls past the top or bottom
+     goes through the page's own fades there rather than being cut off at the
+     panel's edge. The calendar beside it stays put. */
+  margin-top: calc(-36px - env(safe-area-inset-top, 0px) - var(--overhang, 0px));
+  max-height: calc(100vh - 72px - 88px);
+  padding-top: 72px;
+  padding-bottom: 88px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Scrolls without a scrollbar showing. */
+  scrollbar-width: none;
   opacity: 0;
   transition:
     width 0.45s cubic-bezier(0.2, 0.7, 0.2, 1),
     opacity 0.3s ease;
+}
+
+.hp-side::-webkit-scrollbar {
+  display: none;
 }
 
 .hp-inner.has-event .hp-side {
@@ -949,17 +966,51 @@ body {
 }
 
 /* The chosen event. */
+/* The poster's frame, the poster's own shape (--ar, its width over its
+   height) from the start, so nothing moves as it loads. Full width, unless
+   that would push the event's details off the bottom of the window (and
+   never under 200px tall). */
 .hp-poster {
-  display: block;
-  /* Full width, unless that would push the event's details off the bottom
-     of the window. */
-  width: auto;
-  max-width: 100%;
-  max-height: calc(100vh - 400px);
-  max-height: calc(100svh - 400px);
-  min-height: 200px;
-  object-fit: contain;
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: var(--ar);
+  width: min(100%, calc(max(200px, 100vh - 400px) * var(--ar)));
+  width: min(100%, calc(max(200px, 100svh - 400px) * var(--ar)));
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.hp-poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The calendar's small copy, blurred, while the full poster loads. */
+.hp-poster-thumb {
+  filter: blur(10px);
+  transform: scale(1.06);
+}
+
+.hp-poster-full {
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+
+.hp-poster.loaded .hp-poster-full {
+  opacity: 1;
+}
+
+/* Switching events: the new one's details fade in. */
+.hp-details {
+  animation: hp-details-in 0.45s ease both;
+}
+
+@keyframes hp-details-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .hp-details h2 {
@@ -1015,8 +1066,8 @@ body {
 
 .hp-description {
   margin-top: 16px;
-  font-size: 20px;
-  line-height: 25px;
+  font-size: 17px;
+  line-height: 1.45;
   color: #444;
   /* Line breaks inside a paragraph (lineups listed one to a line, as RA
      descriptions often are) are kept. */
@@ -1131,6 +1182,272 @@ body {
   color: inherit;
 }
 
+/* The gallery (#gallery; see GalleryPage.jsx): the images in rows over the
+   artist page's blurred background, running off to the right and scrolled
+   sideways, each row the same height and each image its own width; one at a
+   time shown large over them, with its caption and credit. */
+.gl-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* Below the header, and clear of the bottom edge. */
+  padding: calc(104px + env(safe-area-inset-top, 0px) + var(--overhang, 0px)) 0 56px;
+  box-sizing: border-box;
+  /* The rows fade out at the screen's sides as they scroll past. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 48px, #000 calc(100% - 48px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 48px, #000 calc(100% - 48px), transparent 100%);
+}
+
+.gl-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.gl-rows {
+  --gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: max-content;
+  height: 100%;
+  padding: 0 100px;
+  opacity: 0;
+  filter: blur(7px);
+  transition:
+    opacity 0.5s ease,
+    filter 0.5s ease;
+}
+
+.gallery-page.loaded .gl-rows {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity 0.6s ease 0.1s,
+    filter 0.8s ease 0.1s;
+}
+
+.gl-row {
+  display: flex;
+  gap: var(--gap);
+  height: calc((100% - (var(--rows) - 1) * var(--gap)) / var(--rows));
+}
+
+.gl-open {
+  flex: none;
+  height: 100%;
+  aspect-ratio: var(--ar);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.gl-open .gl-photo {
+  height: 100%;
+}
+
+/* An image's space, its own shape (--ar, width over height) from the start;
+   it fades in once loaded. */
+.gl-photo {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: var(--ar);
+  background: rgba(67, 74, 71, 0.06);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.gl-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gl-full {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.gl-photo.loaded .gl-full {
+  opacity: 1;
+}
+
+.gl-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #434a47;
+}
+
+.gl-credit {
+  font-family: 'Rigid Square Arrows', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  color: #888;
+}
+
+.gl-empty {
+  position: absolute;
+  margin: 0;
+  padding: 0 100px;
+  font-size: 17px;
+}
+
+/* One image large, filling what's left of the screen below the header, over
+   a further wash; it fades in, and each one stepped to fades in after it. */
+.gl-large {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(96px + var(--overhang, 0px)) 80px 64px;
+  background: rgba(244, 246, 247, 0.9);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.35s ease,
+    visibility 0s linear 0.35s;
+}
+
+.gl-large.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.35s ease;
+}
+
+.gl-large-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  animation: hp-details-in 0.45s ease both;
+}
+
+/* As big as fits: the screen's width less the arrows either side, or its
+   height less the header and the caption below. */
+.gl-large-photo {
+  width: min(calc(100vw - 160px), calc((100svh - 96px - 64px - 64px) * var(--ar)));
+  cursor: zoom-out;
+}
+
+.gl-large .gl-caption {
+  align-items: center;
+  max-width: 640px;
+  text-align: center;
+}
+
+.gl-step,
+.gl-close {
+  position: absolute;
+  padding: 12px;
+  border: 0;
+  background: none;
+  color: #434a47;
+  cursor: pointer;
+}
+
+.gl-step {
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.gl-step span {
+  display: inline-block;
+  transition: transform 0.25s ease;
+}
+
+.gl-prev {
+  left: 20px;
+}
+
+.gl-next {
+  right: 20px;
+}
+
+.gl-prev:hover span {
+  transform: translateX(-3px);
+}
+
+.gl-next:hover span {
+  transform: translateX(3px);
+}
+
+.gl-close {
+  top: calc(64px + var(--overhang, 0px));
+  right: 20px;
+  font-family: 'Rigid Square Arrows', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+}
+
+/* On a phone: the rows closer together, and the large image the full
+   width, with the arrows under it (or swipe). */
+@media (max-width: 900px) {
+  /* (Clear of the browser's toolbar, which floats over the bottom.) */
+  .gl-scroll {
+    padding-top: calc(88px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
+    padding-bottom: 80px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .gl-rows {
+    --gap: 8px;
+    padding: 0 16px;
+  }
+
+  .gl-caption {
+    font-size: 13px;
+  }
+
+  .gl-credit {
+    font-size: 11px;
+  }
+
+  /* (The arrows sit clear of the browser's toolbar, which floats over the
+     bottom of the page.) */
+  .gl-large {
+    padding: calc(88px + var(--overhang, 0px)) 12px 140px;
+  }
+
+  .gl-large-photo {
+    width: min(calc(100vw - 24px), calc((100svh - 88px - 140px) * var(--ar)));
+  }
+
+  .gl-step {
+    top: auto;
+    bottom: 76px;
+    transform: none;
+  }
+
+  .gl-prev {
+    left: calc(50% - 64px);
+  }
+
+  .gl-next {
+    right: calc(50% - 64px);
+  }
+
+  .gl-close {
+    top: calc(56px + var(--overhang, 0px));
+    right: 8px;
+  }
+}
+
 /* Narrow screens: one column, profile first. */
 @media (max-width: 900px) {
   .ap-scroll {
@@ -1235,6 +1552,8 @@ body {
   .hp-side {
     position: static;
     width: auto;
+    max-height: none;
+    margin-top: 0;
     padding: 0;
     overflow: visible;
   }
@@ -1250,7 +1569,6 @@ body {
 
   .hp-poster {
     width: 100%;
-    max-height: none;
   }
 }
 

@@ -17,6 +17,7 @@ import ArtistPage from "./ArtistPage.jsx";
 import InfoText from "./InfoText.jsx";
 import HappeningsPage from "./HappeningsPage.jsx";
 import ContactPage from "./ContactPage.jsx";
+import GalleryPage from "./GalleryPage.jsx";
 import logoUrl from "./assets/logo.jpg";
 import headerLogoUrl from "./assets/header-logo.png";
 
@@ -28,9 +29,9 @@ const SETTINGS_WAIT = 700;
 
 // Which view the address asks for: "#artists" pans the sheet over and shows
 // the artist list, "#artists/<slug>" opens that artist's page over it,
-// "#happenings" shows the calendar, "#info" pans the sheet the other way and
-// shows the info text, "#contact" shows the contact form; anything else is
-// the plain sheet.
+// "#gallery" shows the gallery, "#happenings" shows the calendar, "#info"
+// pans the sheet the other way and shows the info text, "#contact" shows the
+// contact form; anything else is the plain sheet.
 // The header link the address belongs to ("#artists/aloisius" → "artists"),
 // whether or not there's a view behind it yet.
 const sectionFromHash = () =>
@@ -40,6 +41,7 @@ const viewFromHash = () => {
   const h = window.location.hash;
   if (h.startsWith("#artists")) return "artists";
   if (h === "#happenings") return "happenings";
+  if (h === "#gallery") return "gallery";
   if (h === "#info") return "info";
   if (h === "#contact") return "contact";
   return "home";
@@ -307,8 +309,8 @@ function App() {
     sceneRef.current?.setPan(panX, panY);
   }, [panX, panY]);
 
-  // No drawing while the artists, the calendar or the contact form are
-  // showing: the ink fades out, and back in on leaving.
+  // No drawing while the artists, the gallery, the calendar or the contact
+  // form are showing: the ink fades out, and back in on leaving.
   useEffect(() => {
     sceneRef.current?.setDrawing(view === "home");
   }, [view]);
@@ -410,6 +412,7 @@ function App() {
         onEventShown={setEventShown}
         backRef={calendarBack}
       />
+      <GalleryPage open={view === "gallery"} onClose={goHome} />
       <ContactPage open={view === "contact"} onClose={goHome} />
     </>
   );

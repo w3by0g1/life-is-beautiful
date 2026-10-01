@@ -42,7 +42,7 @@ export const fetchEvents = () =>
   sanityQuery(
     `*[_type == "event" && defined(date)] | order(date asc) {
       _id, title, date, time, venue, description, ticketUrl,
-      poster { alt, "url": asset->url },
+      poster { alt, "url": asset->url, "aspect": asset->metadata.dimensions.aspectRatio },
       lineup[] { _key, name, url, "artist": artist->{ name, "slug": slug.current } }
     }`,
   )
