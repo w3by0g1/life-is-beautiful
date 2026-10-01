@@ -1018,6 +1018,9 @@ body {
   font-size: 20px;
   line-height: 25px;
   color: #444;
+  /* Line breaks inside a paragraph (lineups listed one to a line, as RA
+     descriptions often are) are kept. */
+  white-space: pre-line;
 }
 
 .hp-tickets {

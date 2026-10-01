@@ -1,0 +1,27 @@
+# Copies new and changed events from Resident Advisor into Sanity every hour
+# (see scripts/sync-ra.mjs). The site reads Sanity directly, so they show on
+# the happenings calendar without a redeploy. Can also be run by hand from
+# the repo's Actions tab.
+name: Sync events from Resident Advisor
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-ra
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/sync-ra.mjs
+        env:
+          SANITY_WRITE_TOKEN: ${{ secrets.SANITY_WRITE_TOKEN }}
