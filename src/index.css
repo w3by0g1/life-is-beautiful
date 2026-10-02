@@ -1347,8 +1347,7 @@ body {
   text-align: center;
 }
 
-.gl-step,
-.gl-close {
+.gl-step {
   position: absolute;
   padding: 12px;
   border: 0;
@@ -1365,33 +1364,12 @@ body {
   line-height: 1;
 }
 
-.gl-step span {
-  display: inline-block;
-  transition: transform 0.25s ease;
-}
-
 .gl-prev {
   left: 20px;
 }
 
 .gl-next {
   right: 20px;
-}
-
-.gl-prev:hover span {
-  transform: translateX(-3px);
-}
-
-.gl-next:hover span {
-  transform: translateX(3px);
-}
-
-.gl-close {
-  top: calc(64px + var(--overhang, 0px));
-  right: 20px;
-  font-family: 'Rigid Square Arrows', ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 12.5px;
-  letter-spacing: 0.02em;
 }
 
 /* On a phone: the rows closer together, and the large image the full
@@ -1440,11 +1418,6 @@ body {
 
   .gl-next {
     right: calc(50% - 64px);
-  }
-
-  .gl-close {
-    top: calc(56px + var(--overhang, 0px));
-    right: 8px;
   }
 }
 

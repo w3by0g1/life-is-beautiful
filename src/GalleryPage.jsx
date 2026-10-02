@@ -215,9 +215,6 @@ export default function GalleryPage({ open, onClose }) {
             </button>
           </>
         )}
-        <button type="button" className="gl-close" onClick={() => setShown(null)} aria-label="Back to the gallery" tabIndex={large ? 0 : -1}>
-          close
-        </button>
       </div>
     </div>
   );

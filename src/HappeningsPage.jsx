@@ -159,6 +159,7 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
     if (open) setChosenId(null);
   }
   const scrollRef = useRef(null);
+  const sideRef = useRef(null);
   const monthsRef = useRef(null);
 
   useEffect(() => {
@@ -212,6 +213,12 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
       backRef.current = null;
     };
   });
+
+  // Each event's details start at their top, beside the calendar too (where
+  // they scroll on their own).
+  useLayoutEffect(() => {
+    if (sideRef.current) sideRef.current.scrollTop = 0;
+  }, [chosenId]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -311,7 +318,7 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
               )}
             </div>
           </section>
-          <aside className="hp-side">
+          <aside className="hp-side" ref={sideRef}>
             {chosen ? (
               <EventDetails event={chosen} onArtist={onArtist} onBack={() => choose(null)} />
             ) : (
