@@ -69,6 +69,13 @@ body {
   width: 100%;
   height: calc(100vh + var(--overhang, 0px));
   height: calc(100lvh + var(--overhang, 0px));
+  transition: opacity 0.6s ease;
+}
+
+/* Under the artist list and the info text the sheet, drawings and all, fades
+   back a little. */
+.scene.dim {
+  opacity: 0.8;
 }
 
 /* The site's name in the middle of the page while the paper is being made
@@ -131,7 +138,7 @@ body {
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   font-weight: 350;
-  letter-spacing: -0.08em;
+  letter-spacing: -0.04em;
   color: #434a47;
 }
 
@@ -144,13 +151,16 @@ body {
 .site-header nav {
   display: flex;
   gap: clamp(18px, 2.6vw, 37px);
+  opacity: 0.85;
   /* A soft white glow all around the letters. */
-  text-shadow: 0 0 7px rgba(255, 255, 255, 0.95);
+  /* text-shadow: 0 0 7px rgba(255, 255, 255, 0.95); */
 }
 
 /* Inter is a variable face, so a link can grow into its bold weight rather
-   than snapping to it. */
+   than snapping to it. Centred in the bold width it keeps, it grows out
+   from its middle rather than off to the right. */
 .site-header nav a {
+  text-align: center;
   transition: font-weight 0.3s ease;
 }
 
@@ -187,22 +197,26 @@ body {
   pointer-events: none;
 }
 
-/* The artist list beside the logo (#artists). Right-aligned, level with the
-   logo's middle; placed by App.jsx. Set in Inter and multiplied onto
-   the sheet, so the paper's grain and light show through as if printed.
-   The names blur into focus as they fade in, once the pan has mostly
-   settled, each a moment after the one above; they fade out together.
-   Hovering a name smoothly
+/* The artist list (#artists): left-aligned, in the middle of the screen over
+   the logo and whatever is drawn there (the sheet stays put). Set in Inter
+   and multiplied onto the sheet, so the paper's grain and light show through
+   as if printed. The names blur into focus as they fade in, each a moment
+   after the one above; they fade out together. Hovering a name smoothly
    bolds it. Only the names themselves take the pointer (and only while
-   shown), so drawing still works around them. */
+   shown). */
 .artists {
   position: fixed;
   z-index: 1;
-  margin: 0;
+  top: 50%;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
   padding: 0;
   list-style: none;
   transform: translateY(-50%);
-  text-align: right;
+  text-align: left;
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 20px;
   font-weight: 350;
@@ -210,31 +224,11 @@ body {
   letter-spacing: -0.08em;
   color: #434a47;
   mix-blend-mode: multiply;
-  white-space: nowrap;
   pointer-events: none;
-}
-
-/* On a narrow screen the names sit centred above the logo (the sheet pans up
-   to make room; see layout.js), so the list hangs from its bottom edge. */
-.artists.tall {
-  transform: translateY(-100%);
-  text-align: center;
-  white-space: normal;
-}
-
-/* There they stand one to a line, each centred. */
-.artists.tall li {
-  margin-right: auto;
-}
-
-/* There the info text sits below the logo, from its top edge. */
-.info-text.tall {
-  transform: none;
 }
 
 .artists li {
   width: fit-content;
-  margin-left: auto;
   opacity: 0;
   filter: blur(6px);
   transition:
@@ -263,12 +257,17 @@ body {
   text-decoration: none;
 }
 
-/* The info text (#info), to the right of the logo, level with its middle;
-   placed by App.jsx. Neue Haas Grotesk, multiplied onto the sheet like the
-   artist list, and blurring into focus the same way once the pan settles. */
+/* The info text (#info), in the middle of the screen over the logo (the sheet
+   stays put); its width is set by App.jsx. Multiplied onto the sheet like the
+   artist list, and blurring into focus the same way. */
 .info-text {
   position: fixed;
   z-index: 1;
+  top: 50%;
+  left: 0;
+  right: 0;
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
   transform: translateY(-50%);
   font-family: 'Inter', system-ui, -apple-system, 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 19px;
@@ -399,7 +398,7 @@ body {
   -webkit-overflow-scrolling: touch;
   --fade-top: calc(96px + var(--overhang, 0px));
   --fade-bottom: 72px;
-  -webkit-mask-image: linear-gradient(
+  /* -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
     #000 var(--fade-top),
@@ -412,7 +411,7 @@ body {
     #000 var(--fade-top),
     #000 calc(100% - var(--fade-bottom)),
     transparent 100%
-  );
+  ); */
 }
 
 .ap-inner {
@@ -474,11 +473,11 @@ body {
 
 .ap-back span {
   display: inline-block;
-  transition: transform 0.25s ease;
+  transition: opacity 0.25s ease;
 }
 
 .ap-back:hover span {
-  transform: translateX(-3px);
+  opacity: 0.5;
 }
 
 .ap-rich p {
@@ -607,24 +606,26 @@ body {
   flex: none;
   margin-top: 4px;
   padding: 1px 5px 2px;
-  background: #434a47;
-  color: #fff;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgb(67, 74, 71, 0.5);
+  color: rgba(67, 74, 71, 1);
   font-family: 'Rigid Square Arrows', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: -0.01em;
   text-decoration: none;
   transition: background 0.2s ease;
 }
 
 .ap-listen:hover {
-  background: #555;
+  background: #ffffff;
 }
 
 .ap-meta {
-  margin: 6px 0 8px;
+  /* margin: 6px 0 8px; */
   font-family: 'Rigid Square Arrows', ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 12.5px;
+  line-height: auto;
   letter-spacing: 0.02em;
   color: #888;
 }
@@ -651,11 +652,12 @@ body {
 }
 
 /* Under the release's notes, a rule between them and the tracks, with the
-   same air above it as below. */
+   same air above it as below. It fades away to nothing at both ends. */
 .ap-tracks-ruled {
   margin-top: 15px;
   padding-top: 15px;
-  border-top: 1px solid rgba(67, 74, 71, 0.25);
+  border-top: 1px solid;
+  border-image: linear-gradient(to right, transparent, rgba(67, 74, 71, 0.25) 20%, rgba(67, 74, 71, 0.25) 80%, transparent) 1;
 }
 
 /* Wrapped lines hang under the title, not the number. */
@@ -804,18 +806,18 @@ body {
 }
 
 /* As wide as its grid, so the pair centres as one. The days are sized so
-   that five weeks fill 95% of the height left on screen; a six-week month
-   runs a little past the bottom. */
+   that five weeks a little overfill the height left on screen (105%), the
+   last week running just past the bottom; the months scroll. */
 .hp-calendar {
-  /* The calendar itself stays in Garamond — the month, the days of the week
-     and the dates on the cells; the rest of the site is set in Inter. */
-  font-family: 'Rigid Square Arrows', 'EB Garamond', Garamond, 'Times New Roman', serif;
+  /* The days of the week and the dates on the cells are set in Inter like
+     the rest of the site. */
+  font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   letter-spacing: normal;
   flex: 0 0 auto;
-  width: min(100%, calc(((100vh - var(--around)) * 0.95 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
-  width: min(100%, calc(((100svh - var(--around)) * 0.95 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
+  width: min(100%, calc(((100vh - var(--around)) * 1.05 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
+  width: min(100%, calc(((100svh - var(--around)) * 1.05 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
   --gap: 12px;
-  --around: 196px;
+  --around: 204px;
 }
 
 .hp-month {
@@ -824,8 +826,7 @@ body {
   gap: 18px;
 }
 
-/* The month is set in Inter like the rest of the site; the days and dates
-   below it keep the calendar's Garamond. */
+/* The month, in Inter's lighter weight and tighter tracking. */
 .hp-month h2 {
   margin: 0;
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
@@ -850,12 +851,10 @@ body {
 
 .hp-dayname {
   margin-bottom: -8px;
-  font-size: 14px;
-  color: #777;
-}
-
-.hp-short {
-  display: none;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+  color: #7777778d;
+  
 }
 
 /* The month shown, with the months either side (each with its own title)
@@ -873,7 +872,7 @@ body {
    otherwise (see HappeningsPage.jsx). */
 /* Each month's title travels with its own grid. */
 .hp-months .hp-month {
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 }
 
 /* Empty days: the space where a day would be. */
@@ -881,7 +880,7 @@ body {
   aspect-ratio: 3 / 4;
 }
 
-/* A day: a poster-shaped outline; past days are shaded grey. */
+/* A day: a poster-shaped outline. */
 .hp-day {
   position: relative;
   box-sizing: border-box;
@@ -895,21 +894,12 @@ body {
   cursor: default;
 }
 
-.hp-day.past {
-  border-color: rgba(0, 0, 0, 0.22);
-  background: linear-gradient(#626262, #878787);
-}
-
 .hp-daynum {
   position: absolute;
   top: 10px;
   left: 11px;
-  font-size: 18px;
+  font-size: 15px;
   color: #595959;
-}
-
-.hp-day.past .hp-daynum {
-  color: #fff;
 }
 
 
@@ -967,15 +957,13 @@ body {
 
 /* The chosen event. */
 /* The poster's frame, the poster's own shape (--ar, its width over its
-   height) from the start, so nothing moves as it loads. Full width, unless
-   that would push the event's details off the bottom of the window (and
-   never under 200px tall). */
+   height) from the start, so nothing moves as it loads. As wide as the text
+   below it. */
 .hp-poster {
   position: relative;
   overflow: hidden;
   aspect-ratio: var(--ar);
-  width: min(100%, calc(max(200px, 100vh - 400px) * var(--ar)));
-  width: min(100%, calc(max(200px, 100svh - 400px) * var(--ar)));
+  width: 100%;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
@@ -1036,15 +1024,15 @@ body {
 
 .hp-back span {
   display: inline-block;
-  transition: transform 0.25s ease;
+  transition: opacity 0.25s ease;
 }
 
 .hp-back:hover span {
-  transform: translateX(-3px);
+  opacity: 0.5;
 }
 
 .hp-details .ap-meta {
-  margin: 0 0 8px;
+  line-height: auto;
   color: #434a47;
 }
 
@@ -1074,9 +1062,17 @@ body {
   white-space: pre-line;
 }
 
+/* The date, time and venue, with the More Info link level with them at the
+   right. */
+.hp-when {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .hp-tickets {
-  display: inline-block;
-  margin-top: 14px;
+  margin-top: 0;
 }
 
 .hp-empty {
@@ -1197,9 +1193,6 @@ body {
   /* Below the header, and clear of the bottom edge. */
   padding: calc(104px + env(safe-area-inset-top, 0px) + var(--overhang, 0px)) 0 56px;
   box-sizing: border-box;
-  /* The rows fade out at the screen's sides as they scroll past. */
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 48px, #000 calc(100% - 48px), transparent 100%);
-  mask-image: linear-gradient(to right, transparent 0, #000 48px, #000 calc(100% - 48px), transparent 100%);
 }
 
 .gl-scroll::-webkit-scrollbar {
@@ -1379,8 +1372,6 @@ body {
   .gl-scroll {
     padding-top: calc(88px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
     padding-bottom: 80px;
-    -webkit-mask-image: none;
-    mask-image: none;
   }
 
   .gl-rows {
@@ -1465,7 +1456,7 @@ body {
     margin-left: auto;
   }
 
-  /* The calendar above the chosen event, with short day names. */
+  /* The calendar above the chosen event. */
   .hp-inner {
     grid-template-columns: minmax(0, 1fr);
     gap: 32px;
@@ -1486,7 +1477,7 @@ body {
   .hp-calendar {
     width: 100%;
     --gap: 5px;
-    --around: 200px;
+    --around: 208px;
   }
 
   .hp-grid {
@@ -1498,18 +1489,10 @@ body {
     font-size: 12px;
   }
 
-  .hp-long {
-    display: none;
-  }
-
-  .hp-short {
-    display: inline;
-  }
-
   .hp-daynum {
     top: 4px;
     left: 5px;
-    font-size: 13px;
+    font-size: 11px;
   }
 
   /* One at a time, there being no room for both: the calendar, and in its
@@ -1538,10 +1521,6 @@ body {
 
   .hp-details {
     width: auto;
-  }
-
-  .hp-poster {
-    width: 100%;
   }
 }
 

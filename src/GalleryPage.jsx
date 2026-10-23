@@ -90,7 +90,7 @@ export default function GalleryPage({ open, onClose }) {
 
   // Each image goes in whichever row is shortest so far (by how wide its
   // images add up to, all being the same height), so the rows come out about
-  // even and still run in the studio's order from the left.
+  // even and still run newest first from the left.
   const [rowsN, setRowsN] = useState(rowCount);
   useEffect(() => {
     const onResize = () => setRowsN(rowCount());

@@ -20,7 +20,8 @@ const formatDate = (date) =>
 
 // A web address written out in the text — with or without its http(s):// —
 // so notes pasted in as plain text are still worth tapping.
-const WEB_ADDRESS = /((?:https?:\/\/|www\.)[^\s<>]+|(?:[a-z0-9][a-z0-9-]*\.)+[a-z]{2,}\/[^\s<>]*)/gi;
+const WEB_ADDRESS =
+  /((?:https?:\/\/|www\.)[^\s<>]+|(?:[a-z0-9][a-z0-9-]*\.)+[a-z]{2,}\/[^\s<>]*)/gi;
 
 // Text with any addresses in it turned into links.
 function linkify(text, keyPrefix) {
@@ -33,7 +34,11 @@ function linkify(text, keyPrefix) {
     const [, address, tail] = part.match(/^(.*?)([.,;:!?)]*)$/);
     return (
       <span key={`${keyPrefix}-${i}`}>
-        <a href={/^https?:\/\//i.test(address) ? address : `https://${address}`} target="_blank" rel="noreferrer">
+        <a
+          href={/^https?:\/\//i.test(address) ? address : `https://${address}`}
+          target="_blank"
+          rel="noreferrer"
+        >
           {address}
         </a>
         {tail}
@@ -51,7 +56,9 @@ export function RichText({ value }) {
       <p key={block._key}>
         {block.children?.map((span, si) => {
           // A span that's already a link keeps its own address.
-          const linked = (span.marks ?? []).some((m) => block.markDefs?.some((d) => d._key === m && d.href));
+          const linked = (span.marks ?? []).some((m) =>
+            block.markDefs?.some((d) => d._key === m && d.href),
+          );
           let node = linked ? span.text : linkify(span.text, span._key ?? si);
           for (const mark of span.marks ?? []) {
             if (mark === "strong") node = <strong>{node}</strong>;
@@ -94,7 +101,7 @@ function Listen({ href }) {
   if (!href) return null;
   return (
     <a className="ap-listen" href={href} target="_blank" rel="noreferrer">
-      listen
+      Listen
     </a>
   );
 }
@@ -130,14 +137,17 @@ function Album({ item, artistName }) {
         />
         {tracks.length > 0 && (
           // Ruled off from the notes above, where there are any.
-          <ol className={`ap-tracks${item.description?.length ? " ap-tracks-ruled" : ""}`}>
+          <ol
+            className={`ap-tracks${item.description?.length ? " ap-tracks-ruled" : ""}`}
+          >
             {tracks.map((t, i) => (
               <li key={t._key}>
                 {/* A number on a filled dot, as in the design. */}
                 <span className="ap-track-no">
                   <span className="ap-track-dot">{i + 1}</span>
                 </span>
-                <strong>{t.title}</strong> <span className="ap-track-by">{t.credit || artistName}</span>
+                <strong>{t.title}</strong>{" "}
+                <span className="ap-track-by">{t.credit || artistName}</span>
               </li>
             ))}
           </ol>
@@ -169,7 +179,8 @@ function groupSingles(content) {
   for (const item of content ?? []) {
     const last = out[out.length - 1];
     if (item._type === "single" && last?.singles) last.items.push(item);
-    else if (item._type === "single") out.push({ singles: true, key: item._key, items: [item] });
+    else if (item._type === "single")
+      out.push({ singles: true, key: item._key, items: [item] });
     else out.push({ key: item._key, item });
   }
   return out;
@@ -351,7 +362,8 @@ export default function ArtistPage({ slug, onClose }) {
                 if (group.singles) {
                   // On its own a single keeps the wide layout; in company they
                   // share a grid.
-                  if (group.items.length === 1) return <Single key={group.key} item={group.items[0]} />;
+                  if (group.items.length === 1)
+                    return <Single key={group.key} item={group.items[0]} />;
                   return (
                     <div className="ap-singles" key={group.key}>
                       {group.items.map((item) => (
@@ -362,7 +374,11 @@ export default function ArtistPage({ slug, onClose }) {
                 }
                 const item = group.item;
                 return item._type === "album" ? (
-                  <Album key={group.key} item={item} artistName={showing.name} />
+                  <Album
+                    key={group.key}
+                    item={item}
+                    artistName={showing.name}
+                  />
                 ) : item._type === "media" ? (
                   <Media key={group.key} item={item} />
                 ) : null;

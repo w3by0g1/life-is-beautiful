@@ -1,8 +1,8 @@
 import {defineArrayMember, defineField, defineType} from 'sanity'
 import {GalleryImagesInput} from '../components/GalleryImagesInput'
 
-// The gallery (#gallery): a collection of images, shown in the order set here.
-// There's just one.
+// The gallery (#gallery): a collection of images, shown newest first by their
+// dates (those without one after, in the order set here). There's just one.
 export const gallery = defineType({
   name: 'gallery',
   title: 'Gallery',
@@ -12,7 +12,7 @@ export const gallery = defineType({
       name: 'images',
       title: 'Images',
       description:
-        'Shown in this order; drag to rearrange. Upload several at once with the button (or drop them here), then click each to add its details.',
+        'Shown newest first by date; images without a date come after, in this order (drag to rearrange). Upload several at once with the button (or drop them here), then click each to add its details.',
       type: 'array',
       components: {input: GalleryImagesInput},
       of: [
@@ -39,6 +39,12 @@ export const gallery = defineType({
               title: 'Credit',
               description: "e.g. a photographer's name.",
               type: 'string',
+            }),
+            defineField({
+              name: 'date',
+              title: 'Date',
+              description: 'When it was taken. The gallery shows the latest first.',
+              type: 'date',
             }),
           ],
           // Freshly uploaded images say so until their details are added.

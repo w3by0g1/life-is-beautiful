@@ -1094,6 +1094,8 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   // While drawing is off (see setDrawing) a press doesn't start a stroke (and
   // isn't sent); the pointer still steers the light.
   let drawing = true
+  // How much the ink shows, 0–1 (see setDrawing).
+  let inkShown = 1
   const logged = (kind, fn) => {
     const sent = live.listen(kind, fn)
     return intro.listen(kind, (e) => (kind === 'down' && !drawing ? onPointerMove(e) : sent(e)))
@@ -1264,11 +1266,11 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     uploadPending()
     stepPan(Math.min(dt, 0.25))
     // Ink fades in with the logo as it embosses on load (following the same
-    // curve), out while drawing is off, and back in after.
-    const inkTarget = drawing ? 1 : 0
+    // curve), out while it's hidden (see setDrawing), and back in after.
+    const inkTarget = inkShown
     if (inkToggle !== inkTarget) {
       const step = Math.min(dt, 0.25) / INK_TOGGLE_TIME
-      inkToggle = inkTarget > inkToggle ? Math.min(1, inkToggle + step) : Math.max(0, inkToggle - step)
+      inkToggle = inkTarget > inkToggle ? Math.min(inkTarget, inkToggle + step) : Math.max(inkTarget, inkToggle - step)
     }
     ink.uniforms.inkOpacity.value = inkToggle * embossUniforms.emboss.value
     // The saved intro drawing replays once the logo has finished embossing.
@@ -1300,11 +1302,13 @@ export async function createPaperScene(container, logoUrl, options = {}) {
       panUniforms()
       fitRemaps()
     },
-    // Switches the user's drawing off (the ink fades out; strokes arriving
-    // from other people are still laid down, unseen) or back on (it fades
-    // back in).
-    setDrawing(on) {
+    // Switches the user's drawing off or back on. Unless inkShown (how much
+    // the ink shows, 0–1) says otherwise, the ink fades out with it (strokes
+    // arriving from other people are still laid down, unseen) and back in
+    // after.
+    setDrawing(on, { inkShown: shown = on ? 1 : 0 } = {}) {
       drawing = on
+      inkShown = shown
       if (!on) release()
     },
     // How far the view may pan (CSS px), { left, right }; the sheet is rebuilt

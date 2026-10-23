@@ -10,22 +10,46 @@ import { Meta, RichText } from "./ArtistPage.jsx";
 // side of this one.
 const MONTHS_EITHER_SIDE = 12;
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 // A month, d months along: [year, month].
 const shift = (y, m, d) => [y + Math.floor((m + d) / 12), (m + d + 12) % 12];
 
 // Dates as "YYYY-MM-DD" (as Sanity stores them), in local time.
-const iso = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-const todayIso = () => {
-  const t = new Date();
-  return iso(t.getFullYear(), t.getMonth(), t.getDate());
-};
+const iso = (y, m, d) =>
+  `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 // "2026-08-10" → "MON, 10 AUG 2026".
 const formatDate = (date) =>
   new Date(`${date}T00:00:00Z`)
-    .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+    .toLocaleDateString("en-GB", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    })
     .replace(/,/g, "")
     .replace(/^(\w+) /, "$1, ")
     .toUpperCase();
@@ -96,8 +120,16 @@ function Poster({ poster, alt }) {
   const [loaded, setLoaded] = useState(false);
   const full = imageUrl(poster.url, POSTER_W);
   return (
-    <div className={`hp-poster${loaded ? " loaded" : ""}`} style={{ "--ar": poster.aspect ?? 0.75 }}>
-      <img className="hp-poster-thumb" src={imageUrl(poster.url, THUMB_W)} alt="" aria-hidden="true" />
+    <div
+      className={`hp-poster${loaded ? " loaded" : ""}`}
+      style={{ "--ar": poster.aspect ?? 0.75 }}
+    >
+      <img
+        className="hp-poster-thumb"
+        src={imageUrl(poster.url, THUMB_W)}
+        alt=""
+        aria-hidden="true"
+      />
       <img
         className="hp-poster-full"
         // Already in the cache (preloaded, or seen before): shown at once.
@@ -116,23 +148,37 @@ function Poster({ poster, alt }) {
 function EventDetails({ event, onArtist, onBack }) {
   return (
     <div className="hp-details" key={event._id}>
-      {event.poster?.url && <Poster poster={event.poster} alt={event.poster.alt ?? event.title} />}
+      {event.poster?.url && (
+        <Poster poster={event.poster} alt={event.poster.alt ?? event.title} />
+      )}
       <h2>
-        <button type="button" className="hp-back" onClick={onBack} aria-label="Back to the calendar">
+        <button
+          type="button"
+          className="hp-back"
+          onClick={onBack}
+          aria-label="Back to the calendar"
+        >
           <span aria-hidden="true">←</span>
         </button>
         {event.title}
       </h2>
-      <Meta parts={[formatDate(event.date), event.time, event.venue]} />
+      <div className="hp-when">
+        <Meta parts={[formatDate(event.date), event.time, event.venue]} />
+        {event.ticketUrl && (
+          <a
+            className="ap-listen hp-tickets"
+            href={event.ticketUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            More Info
+          </a>
+        )}
+      </div>
       <Lineup lineup={event.lineup} onArtist={onArtist} />
       <div className="ap-rich hp-description">
         <RichText value={event.description} />
       </div>
-      {event.ticketUrl && (
-        <a className="ap-listen hp-tickets" href={event.ticketUrl} target="_blank" rel="noreferrer">
-          get tickets
-        </a>
-      )}
     </div>
   );
 }
@@ -142,7 +188,13 @@ function EventDetails({ event, onArtist, onBack }) {
 // onEventShown(bool): tells the header whether an event has taken the
 // calendar's place; backRef: given a function that goes back to the calendar,
 // for the header's happenings link to call.
-export default function HappeningsPage({ open, onClose, onArtist, onEventShown, backRef }) {
+export default function HappeningsPage({
+  open,
+  onClose,
+  onArtist,
+  onEventShown,
+  backRef,
+}) {
   const [events, setEvents] = useState(null);
   // The months shown, and the one currently in view.
   const [thisMonth] = useState(() => {
@@ -173,10 +225,10 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
     };
   }, [open, events]);
 
-  const today = todayIso();
   const byDate = useMemo(() => {
     const map = new Map();
-    for (const e of events ?? []) map.set(e.date, [...(map.get(e.date) ?? []), e]);
+    for (const e of events ?? [])
+      map.set(e.date, [...(map.get(e.date) ?? []), e]);
     return map;
   }, [events]);
   // The chosen event: nothing until a poster is clicked, so the calendar is
@@ -190,7 +242,8 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
   const calendarScroll = useRef(null);
   const choose = (id) => {
     const el = scrollRef.current;
-    if (el && onePanel() && id && !chosenId) calendarScroll.current = el.scrollTop;
+    if (el && onePanel() && id && !chosenId)
+      calendarScroll.current = el.scrollTop;
     setChosenId(id);
   };
   // The header needs to know when an event has the screen to itself, so its
@@ -246,13 +299,15 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
   const monthGrid = (gy, gm) => {
     const firstDay = (new Date(gy, gm, 1).getDay() + 6) % 7;
     const count = new Date(gy, gm + 1, 0).getDate();
-    const gcells = [...Array(firstDay).fill(null), ...Array.from({ length: count }, (_, i) => i + 1)];
+    const gcells = [
+      ...Array(firstDay).fill(null),
+      ...Array.from({ length: count }, (_, i) => i + 1),
+    ];
     const grid = (
       <div className="hp-grid">
         {DAYS.map((d) => (
           <div key={d} className="hp-dayname">
-            <span className="hp-long">{d}</span>
-            <span className="hp-short">{d.slice(0, 3)}</span>
+            {d.slice(0, 3)}
           </div>
         ))}
         {gcells.map((d, i) => {
@@ -261,27 +316,42 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
           const date = iso(gy, gm, d);
           const dayEvents = byDate.get(date) ?? [];
           const ev = dayEvents[0];
-          // Today counts as gone, so it's shaded like the days before it.
-          const past = date <= today;
-          const isChosen = ev && chosen && dayEvents.some((e) => e._id === chosen._id);
+          const isChosen =
+            ev && chosen && dayEvents.some((e) => e._id === chosen._id);
           return (
             <button
               type="button"
               key={date}
-              className={`hp-day${past ? " past" : ""}${ev ? " has-event" : ""}${isChosen ? " chosen" : ""}`}
+              className={`hp-day${ev ? " has-event" : ""}${isChosen ? " chosen" : ""}`}
               disabled={!ev}
-              onPointerEnter={() => dayEvents.forEach((e) => preload(imageUrl(e.poster?.url, POSTER_W)))}
+              onPointerEnter={() =>
+                dayEvents.forEach((e) =>
+                  preload(imageUrl(e.poster?.url, POSTER_W)),
+                )
+              }
               onClick={() => {
                 if (!ev) return;
                 // Clicking a day steps through its events, then puts the
                 // details away again.
                 const at = dayEvents.findIndex((e) => e._id === chosen?._id);
-                choose(at < 0 ? dayEvents[0]._id : (dayEvents[at + 1]?._id ?? null));
+                choose(
+                  at < 0 ? dayEvents[0]._id : (dayEvents[at + 1]?._id ?? null),
+                );
               }}
               aria-label={ev ? `${ev.title}, ${formatDate(date)}` : undefined}
             >
-              {ev?.poster?.url ? <img src={imageUrl(ev.poster.url, THUMB_W)} alt="" loading="lazy" /> : <span className="hp-daynum">{d}</span>}
-              {dayEvents.length > 1 && <span className="hp-more">+{dayEvents.length - 1}</span>}
+              {ev?.poster?.url ? (
+                <img
+                  src={imageUrl(ev.poster.url, THUMB_W)}
+                  alt=""
+                  loading="lazy"
+                />
+              ) : (
+                <span className="hp-daynum">{d}</span>
+              )}
+              {dayEvents.length > 1 && (
+                <span className="hp-more">+{dayEvents.length - 1}</span>
+              )}
             </button>
           );
         })}
@@ -305,7 +375,12 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
       aria-hidden={!open}
       onClick={(e) => {
         const c = e.target.classList;
-        if (e.target === e.currentTarget || c.contains("ap-scroll") || c.contains("hp-inner")) onClose();
+        if (
+          e.target === e.currentTarget ||
+          c.contains("ap-scroll") ||
+          c.contains("hp-inner")
+        )
+          onClose();
       }}
     >
       <div className="ap-scroll" ref={scrollRef}>
@@ -314,15 +389,23 @@ export default function HappeningsPage({ open, onClose, onArtist, onEventShown, 
             {/* Months one after another, scrolled through like any page. */}
             <div className="hp-months" ref={monthsRef}>
               {Array.from({ length: MONTHS_EITHER_SIDE * 2 + 1 }, (_, i) =>
-                monthGrid(...shift(thisMonth.y, thisMonth.m, i - MONTHS_EITHER_SIDE)),
+                monthGrid(
+                  ...shift(thisMonth.y, thisMonth.m, i - MONTHS_EITHER_SIDE),
+                ),
               )}
             </div>
           </section>
           <aside className="hp-side" ref={sideRef}>
             {chosen ? (
-              <EventDetails event={chosen} onArtist={onArtist} onBack={() => choose(null)} />
+              <EventDetails
+                event={chosen}
+                onArtist={onArtist}
+                onBack={() => choose(null)}
+              />
             ) : (
-              events?.length === 0 && <p className="hp-empty">No happenings yet.</p>
+              events?.length === 0 && (
+                <p className="hp-empty">No happenings yet.</p>
+              )
             )}
           </aside>
         </div>
