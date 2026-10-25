@@ -75,7 +75,7 @@ body {
 /* Under the artist list and the info text the sheet, drawings and all, fades
    back a little. */
 .scene.dim {
-  opacity: 0.8;
+  opacity: 0.6;
 }
 
 /* The site's name in the middle of the page while the paper is being made
@@ -158,9 +158,11 @@ body {
 
 /* Inter is a variable face, so a link can grow into its bold weight rather
    than snapping to it. Centred in the bold width it keeps, it grows out
-   from its middle rather than off to the right. */
+   from its middle rather than off to the right. The names are capitalised
+   here; in the code they're the lowercase views they open. */
 .site-header nav a {
   text-align: center;
+  text-transform: capitalize;
   transition: font-weight 0.3s ease;
 }
 
@@ -1091,6 +1093,14 @@ body {
   padding-top: calc(160px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
 }
 
+/* Once sent, the thanks sits in the middle of the screen (the same room above
+   and below it). */
+.ct-inner.sent {
+  align-items: center;
+  padding-top: calc(96px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
+  padding-bottom: 96px;
+}
+
 .ct-form {
   width: 100%;
   max-width: 560px;
@@ -1152,14 +1162,22 @@ body {
   gap: 14px;
 }
 
+/* Boxed like an artist's Listen link. */
 .ct-send {
-  border: 0;
+  line-height: normal;
   cursor: pointer;
 }
 
 .ct-send:disabled {
   opacity: 0.45;
+  background: rgba(255, 255, 255, 0.5);
   cursor: default;
+}
+
+/* Once sent: the thanks and the button to write another, centred. */
+.ct-sent {
+  align-items: center;
+  text-align: center;
 }
 
 .ct-sent p,

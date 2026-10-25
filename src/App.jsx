@@ -12,6 +12,7 @@ import GalleryPage from "./GalleryPage.jsx";
 import logoUrl from "./assets/logo.jpg";
 import headerLogoUrl from "./assets/header-logo.png";
 
+// The header links: each the view it opens (set capitalised; see index.css).
 const NAV = ["home", "artists", "gallery", "happenings", "info", "contact"];
 
 // How long (ms) the sheet waits for its settings before going ahead without

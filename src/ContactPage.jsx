@@ -7,6 +7,10 @@ import { useEffect, useRef, useState } from "react";
 // forwards whatever is posted to it. The very first message sent sets it up:
 // FormSubmit emails the address a link to confirm it wants these, and only
 // messages after that are passed on.
+// FormSubmit only answers once it has sent the email, which can take a good
+// while, so the form says the message is sent straight away and the request
+// carries on behind (keepalive, so it outlives the page being closed). If it
+// turns out to have failed, the message comes back with the error.
 
 const TO = "youarethestream@gmail.com";
 const ENDPOINT = `https://formsubmit.co/ajax/${TO}`;
@@ -16,7 +20,7 @@ export default function ContactPage({ open, onClose }) {
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  // "idle", "sending", "sent" or "failed".
+  // "idle", "sent" or "failed".
   const [status, setStatus] = useState("idle");
   const firstRef = useRef(null);
 
@@ -30,34 +34,51 @@ export default function ContactPage({ open, onClose }) {
   // The first field takes the cursor on opening, where there's a pointer (on a
   // phone that would throw the keyboard up over the page straight away).
   useEffect(() => {
-    if (!open || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-    const t = setTimeout(() => firstRef.current?.focus({ preventScroll: true }), 450);
+    if (
+      !open ||
+      !window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    )
+      return;
+    const t = setTimeout(
+      () => firstRef.current?.focus({ preventScroll: true }),
+      450,
+    );
     return () => clearTimeout(t);
   }, [open]);
 
   const send = async (e) => {
     e.preventDefault();
-    if (status === "sending" || !body.trim()) return;
-    setStatus("sending");
+    if (!body.trim()) return;
+    const sent = { email, subject, body };
+    const payload = JSON.stringify({
+      _subject: subject.trim() || "(no subject)",
+      _template: "box",
+      _captcha: "false",
+      // Replying to the email goes to the sender.
+      ...(email.trim() && { email: email.trim(), _replyto: email.trim() }),
+      subject: subject.trim(),
+      message: body.trim(),
+    });
+    setStatus("sent");
     try {
       const res = await fetch(ENDPOINT, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          _subject: subject.trim() || "(no subject)",
-          _template: "box",
-          _captcha: "false",
-          // Replying to the email goes to the sender.
-          ...(email.trim() && { email: email.trim(), _replyto: email.trim() }),
-          subject: subject.trim(),
-          message: body.trim(),
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: payload,
+        // (A keepalive request can't carry more than 64KB.)
+        keepalive: payload.length < 60000,
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || String(data.success) === "false") throw new Error(data.message || res.statusText);
-      setStatus("sent");
+      if (!res.ok || String(data.success) === "false")
+        throw new Error(data.message || res.statusText);
     } catch (err) {
       console.warn("Could not send the message:", err);
+      setEmail(sent.email);
+      setSubject(sent.subject);
+      setBody(sent.body);
       setStatus("failed");
     }
   };
@@ -68,16 +89,26 @@ export default function ContactPage({ open, onClose }) {
       aria-hidden={!open}
       onClick={(e) => {
         const c = e.target.classList;
-        if (e.target === e.currentTarget || c.contains("ap-scroll") || c.contains("ct-inner")) onClose();
+        if (
+          e.target === e.currentTarget ||
+          c.contains("ap-scroll") ||
+          c.contains("ct-inner")
+        )
+          onClose();
       }}
     >
       <div className="ap-scroll">
-        <div className="ap-inner ct-inner">
+        <div className={`ap-inner ct-inner${status === "sent" ? " sent" : ""}`}>
           {status === "sent" ? (
             <div className="ct-form ct-sent">
               <p>Thank you, your message is on its way.</p>
-              <button type="button" className="ap-listen ct-send" onClick={reset} tabIndex={open ? 0 : -1}>
-                write another
+              <button
+                type="button"
+                className="ap-listen ct-send"
+                onClick={reset}
+                tabIndex={open ? 0 : -1}
+              >
+                Write another
               </button>
             </div>
           ) : (
@@ -106,15 +137,27 @@ export default function ContactPage({ open, onClose }) {
               </label>
               <label className="ct-field">
                 <span>message</span>
-                <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={9} required tabIndex={open ? 0 : -1} />
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={9}
+                  required
+                  tabIndex={open ? 0 : -1}
+                />
               </label>
               <div className="ct-actions">
-                <button type="submit" className="ap-listen ct-send" disabled={status === "sending" || !body.trim()} tabIndex={open ? 0 : -1}>
-                  {status === "sending" ? "sending…" : "send"}
+                <button
+                  type="submit"
+                  className="ap-listen ct-send"
+                  disabled={!body.trim()}
+                  tabIndex={open ? 0 : -1}
+                >
+                  Send
                 </button>
                 {status === "failed" && (
                   <p className="ct-error" role="alert">
-                    That didn't go through. Try again, or write to <a href={`mailto:${TO}`}>{TO}</a>.
+                    That didn't go through. Try again, or write to{" "}
+                    <a href={`mailto:${TO}`}>{TO}</a>.
                   </p>
                 )}
               </div>
