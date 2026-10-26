@@ -217,9 +217,15 @@ function App() {
     place();
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, { passive: true });
+    // And whenever the scene itself changes size: on a first visit the
+    // stylesheet can arrive after this first runs, with the scene still 0px
+    // tall, which would leave the logo resting half a screen low.
+    const observer = new ResizeObserver(place);
+    observer.observe(containerRef.current);
     return () => {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place);
+      observer.disconnect();
     };
   }, []);
 
