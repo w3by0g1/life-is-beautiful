@@ -62,8 +62,8 @@ html {
    status-bar scroll (fullBleed.js) always has room from the start. */
 body {
   margin: 0;
-  min-height: calc(100vh + var(--overhang, 0px));
-  min-height: calc(100lvh + var(--overhang, 0px));
+  min-height: calc(100vh + var(--overhang, 0px) + var(--underhang, 0px));
+  min-height: calc(100lvh + var(--overhang, 0px) + var(--underhang, 0px));
 }
 
 /* The sheet covers the whole screen. On phones the browser's bars float over
@@ -77,8 +77,8 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: calc(100vh + var(--overhang, 0px));
-  height: calc(100lvh + var(--overhang, 0px));
+  height: calc(100vh + var(--overhang, 0px) + var(--underhang, 0px));
+  height: calc(100lvh + var(--overhang, 0px) + var(--underhang, 0px));
   transition: opacity 0.6s ease;
 }
 
@@ -286,7 +286,8 @@ body {
     flex-direction: column;
     align-items: flex-end;
     gap: 8px;
-    margin-top: 3px;
+    /* Pulled up close under the ×. */
+    margin-top: -14px;
     padding-right: calc(16px + env(safe-area-inset-right, 0px));
     font-size: 22px;
     opacity: 0;
@@ -308,8 +309,8 @@ body {
     top: 0;
     left: 0;
     width: 100%;
-    height: calc(100vh + var(--overhang, 0px));
-    height: calc(100lvh + var(--overhang, 0px));
+    height: calc(100vh + var(--overhang, 0px) + var(--underhang, 0px));
+    height: calc(100lvh + var(--overhang, 0px) + var(--underhang, 0px));
     z-index: 3;
     touch-action: none;
     background: rgba(238, 238, 235, 0.55);
@@ -548,8 +549,8 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: calc(100vh + var(--overhang, 0px));
-  height: calc(100lvh + var(--overhang, 0px));
+  height: calc(100vh + var(--overhang, 0px) + var(--underhang, 0px));
+  height: calc(100lvh + var(--overhang, 0px) + var(--underhang, 0px));
   z-index: 2;
   overflow: hidden;
   /* How much the sheet behind is lightened (the wash's opacity and a touch of
@@ -576,9 +577,20 @@ body {
 
 /* The page's content scrolls inside the blurred background, fading to
    transparent at the top (under the header) and bottom edges. */
+/* (The room it reaches under a phone's toolbar, at the end of what scrolls,
+   so the last of it can still be scrolled clear of the toolbar.) */
+.ap-scroll::after {
+  content: '';
+  display: block;
+  height: var(--underhang, 0px);
+}
+
 .ap-scroll {
   position: absolute;
   inset: 0;
+  /* Up and down only: anything a little wider than the screen is cut off
+     rather than letting the page be dragged sideways. */
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -1282,7 +1294,7 @@ body {
 .ct-inner.sent {
   align-items: center;
   padding-top: calc(96px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
-  padding-bottom: 96px;
+  padding-bottom: calc(96px + var(--underhang, 0px));
 }
 
 .ct-form {
@@ -1393,7 +1405,7 @@ body {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   /* Below the header, and clear of the bottom edge. */
-  padding: calc(104px + env(safe-area-inset-top, 0px) + var(--overhang, 0px)) 0 56px;
+  padding: calc(104px + env(safe-area-inset-top, 0px) + var(--overhang, 0px)) 0 calc(56px + var(--underhang, 0px));
   box-sizing: border-box;
 }
 
@@ -1504,7 +1516,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: calc(96px + var(--overhang, 0px)) 80px 64px;
+  padding: calc(96px + var(--overhang, 0px)) 80px calc(64px + var(--underhang, 0px));
   background: rgba(244, 246, 247, 0.9);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
@@ -1573,7 +1585,7 @@ body {
   /* (Clear of the browser's toolbar, which floats over the bottom.) */
   .gl-scroll {
     padding-top: calc(88px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
-    padding-bottom: 80px;
+    padding-bottom: calc(80px + var(--underhang, 0px));
   }
 
   .gl-rows {
@@ -1592,7 +1604,10 @@ body {
   /* (The arrows sit clear of the browser's toolbar, which floats over the
      bottom of the page.) */
   .gl-large {
-    padding: calc(88px + var(--overhang, 0px)) 12px 140px;
+    padding: calc(88px + var(--overhang, 0px)) 12px calc(140px + var(--underhang, 0px));
+    /* Nearly solid, so the gallery's images behind don't show through as a
+       faint box around the one shown. */
+    background: rgba(244, 246, 247, 0.97);
   }
 
   .gl-large-photo {
@@ -1601,7 +1616,8 @@ body {
 
   .gl-step {
     top: auto;
-    bottom: 76px;
+    /* (Above the part of the view that reaches under the toolbar.) */
+    bottom: calc(76px + var(--underhang, 0px));
     transform: none;
   }
 

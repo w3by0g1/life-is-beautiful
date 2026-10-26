@@ -15,6 +15,12 @@
 // Never more than an iPhone's tallest status bar (CSS px), however the browser
 // reports its size.
 const MAX_OVERHANG = 70
+// Newer phone browsers float their toolbar over the bottom of the page too,
+// below what the page counts as its height (100lvh). The rest of the screen
+// the page doesn't count goes in --underhang, for the sheet and the pages
+// over it to reach down under the toolbar (with a little to spare).
+const UNDERHANG_SPARE = 16
+const MAX_UNDERHANG = 160
 
 export function fullBleed() {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone
@@ -26,17 +32,28 @@ export function fullBleed() {
   // height changes as its bars settle or shrink, so this keeps the largest
   // seen (the status bar itself never changes size).
   const measured = { portrait: 0, landscape: 0 }
+  const measuredUnder = { portrait: 0, landscape: 0 }
   let overhang = 0
+  let underhang = 0
   const measure = () => {
     // The part of the screen above the page: the screen's height (its width
     // when sideways, which iOS doesn't swap) less the page's.
     const portrait = innerHeight >= innerWidth
     const screenH = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height)
     const key = portrait ? 'portrait' : 'landscape'
-    measured[key] = Math.max(measured[key], Math.round(Math.min(MAX_OVERHANG, Math.max(0, screenH - innerHeight))))
+    const outside = Math.max(0, screenH - innerHeight)
+    measured[key] = Math.max(measured[key], Math.round(Math.min(MAX_OVERHANG, outside)))
     if (measured[key] !== overhang) {
       overhang = measured[key]
       root.style.setProperty('--overhang', `${overhang}px`)
+    }
+    measuredUnder[key] = Math.max(
+      measuredUnder[key],
+      Math.round(Math.min(MAX_UNDERHANG, Math.max(0, outside - overhang) + UNDERHANG_SPARE)),
+    )
+    if (measuredUnder[key] !== underhang) {
+      underhang = measuredUnder[key]
+      root.style.setProperty('--underhang', `${underhang}px`)
     }
   }
   // Keeps the page scrolled to exactly the overhang: the browser can reset or
