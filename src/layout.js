@@ -16,4 +16,4 @@ export const tallTextWidth = (width) => width - 2 * tallMargin(width)
 
 // How wide the info text is set: comfortable on a big screen, and at least
 // most of a phone's width.
-export const infoTextWidth = (width) => Math.round(Math.min(460, Math.max(width * 0.42, width - 2 * Math.max(16, width * 0.04) - 120)))
+export const infoTextWidth = (width) => Math.round(Math.min(530, Math.max(width * 0.42, width - 2 * Math.max(16, width * 0.04) - 120)))

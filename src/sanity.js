@@ -57,5 +57,6 @@ export const fetchGallery = () =>
     (list) => list?.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
   )
 
-// The sheet's settings (how long a drawing stays, in minutes).
-export const fetchSettings = () => sanityQuery(`*[_id == "settings"][0] { strokeMinutes }`)
+// The sheet's settings (how long a drawing stays, in minutes, and whether the
+// header's name is a drawing or text).
+export const fetchSettings = () => sanityQuery(`*[_id == "settings"][0] { strokeMinutes, headerDrawing }`)

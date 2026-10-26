@@ -665,13 +665,17 @@ export async function createPaperScene(container, logoUrl, options = {}) {
           // Cast shadow: march toward the light over the logo's height; a point
           // is shaded where a ridge along the way rises above the light ray.
           // (The local relief factor is reused for the samples, which are close
-          // by.) Only near the logo, where its shadows can reach.
+          // by.) Only near the logo, where its shadows can reach. Each pixel's
+          // samples start a different fraction of a step along (interleaved
+          // gradient noise), so the shadow's edge comes out finely soft rather
+          // than stepped into copies of the ridge.
           if ( logoT.a > 0.0 && abs( relief ) > 0.001 ) {
             vec2 toLightUv = vec2( lightDir.x / ( 2.0 * paperAspect ), -lightDir.y / 2.0 ) * paperRemap.xy;
             float h0 = logoT.b * relief;
             float occ = 0.0;
-            for ( int i = 1; i <= 20; i++ ) {
-              float t = shadowLength * float( i ) / 20.0;
+            float jitter = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) );
+            for ( int i = 1; i <= 32; i++ ) {
+              float t = shadowLength * ( float( i ) - jitter ) / 32.0;
               float hs = texture2D( logoMap, paperUv + toLightUv * t ).b * relief;
               occ = max( occ, hs - h0 - t / shadowLength );
             }
@@ -1273,9 +1277,8 @@ export async function createPaperScene(container, logoUrl, options = {}) {
       inkToggle = inkTarget > inkToggle ? Math.min(inkTarget, inkToggle + step) : Math.max(inkTarget, inkToggle - step)
     }
     ink.uniforms.inkOpacity.value = inkToggle * embossUniforms.emboss.value
-    // The saved intro drawing replays once the logo has finished embossing.
-    const afterEmboss = since - EMBOSS_DELAY - EMBOSS_DURATION
-    intro.update(introStart !== null && afterEmboss >= 0, afterEmboss)
+    // A recording played from the dev panel's list carries on.
+    intro.update()
     live.update()
     ink.setTime(inkNow())
     ink.update(ldt, performance.now())

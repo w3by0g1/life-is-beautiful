@@ -15,6 +15,14 @@ export const settings = defineType({
       initialValue: 2,
       validation: (rule) => rule.required().min(0.1).max(60),
     }),
+    defineField({
+      name: 'headerDrawing',
+      title: 'Header: show a drawing',
+      description:
+        'On: the site’s name at the top left is one of the recorded drawings, written out in calligraphy. Off: it’s the name in text.',
+      type: 'boolean',
+      initialValue: true,
+    }),
   ],
   preview: {prepare: () => ({title: 'Settings'})},
 })

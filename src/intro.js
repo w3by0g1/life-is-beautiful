@@ -1,10 +1,10 @@
 import introBank from './assets/intro-path.json'
 
-// Records drawing sessions into a bank, and replays them as a second "ghost"
-// pen: a random recording starts once the logo has embossed, and another random
-// one REPLAY_GAP seconds after each finishes. The ghost draws ink and presses
-// the logo but doesn't move the light, and it runs alongside the user, who can
-// draw at the same time.
+// Records drawing sessions into a bank. They aren't replayed on the sheet by
+// themselves any more (the header shows one; see Signature.jsx), but one can
+// still be played from the dev panel's list, as a second "ghost" pen: it
+// draws ink and presses the logo but doesn't move the light, and it runs
+// alongside the user, who can draw at the same time.
 //
 // While developing, a Record / Stop button sits in the bottom-right corner. After
 // Record, the next press starts the recording, which logs every pointer
@@ -17,10 +17,6 @@ import introBank from './assets/intro-path.json'
 // screen side (as the logo is sized), so drawings line up with the logo at any
 // window size.
 
-// Seconds after the logo finishes embossing before the first replay.
-const REPLAY_DELAY = 0.3
-// Seconds between one replay finishing and the next starting.
-const REPLAY_GAP = 30
 // Longest recording kept, in seconds.
 const RECORD_MAX = 120
 
@@ -30,7 +26,7 @@ const UP = 2
 
 // The saved recordings, as lists of [type, ms, x, y] events. (Older files held
 // a single recording.)
-function recordingsIn(saved) {
+export function recordingsIn(saved) {
   if (saved?.recordings) return saved.recordings.map((r) => r.events).filter((e) => e?.length)
   if (saved?.events?.length) return [saved.events]
   return []
@@ -48,11 +44,10 @@ export function createIntro({ element, container, down, move, up, offset = () =>
   const bank = recordingsIn(introBank)
   // When each was recorded (for the list), where known.
   const recordedAt = introBank?.recordings?.map((r) => r.recordedAt) ?? []
-  // The recording in progress, if any; the replay in progress, if any; when the
-  // next replay may start (performance.now ms); the last recording played.
+  // The recording in progress, if any; the replay in progress, if any; the
+  // last recording played.
   let rec = null
   let replay = null
-  let nextAt = null
   let lastPlayed = -1
 
   // Record / Stop button (only while developing: saving needs the dev server).
@@ -317,14 +312,6 @@ export function createIntro({ element, container, down, move, up, offset = () =>
     replay = { events: bank[i], i: 0, start: performance.now(), held: false }
   }
 
-  // A random recording, not the one just played when there's a choice.
-  const pick = () => {
-    let i = Math.floor(Math.random() * bank.length)
-    if (bank.length > 1 && i === lastPlayed) i = (i + 1 + Math.floor(Math.random() * (bank.length - 1))) % bank.length
-    lastPlayed = i
-    return bank[i]
-  }
-
   return {
     // Wraps a DOM pointer listener so it's logged while recording. Live input
     // always goes through, replay or not. A recording is one pen, so only the
@@ -344,19 +331,11 @@ export function createIntro({ element, container, down, move, up, offset = () =>
       }
     },
 
-    // Per frame. embossed: whether the logo has finished embossing; since:
-    // seconds since it did.
-    update(embossed, since) {
-      if (!bank.length || !embossed) return
+    // Per frame: carries on a replay started from the list, if one is
+    // playing.
+    update() {
+      if (!replay) return
       const now = performance.now()
-      if (!replay) {
-        if (nextAt === null) {
-          if (since < REPLAY_DELAY) return
-          nextAt = now
-        }
-        if (now < nextAt) return
-        replay = { events: pick(), i: 0, start: now, held: false }
-      }
       const t = now - replay.start
       const events = replay.events
       while (replay.i < events.length && events[replay.i][1] <= t) {
@@ -375,7 +354,6 @@ export function createIntro({ element, container, down, move, up, offset = () =>
       if (replay.i >= events.length) {
         if (replay.held) up()
         replay = null
-        nextAt = now + REPLAY_GAP * 1000
       }
     },
 

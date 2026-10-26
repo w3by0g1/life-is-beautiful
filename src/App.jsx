@@ -9,11 +9,18 @@ import InfoText from "./InfoText.jsx";
 import HappeningsPage from "./HappeningsPage.jsx";
 import ContactPage from "./ContactPage.jsx";
 import GalleryPage from "./GalleryPage.jsx";
+import Signature from "./Signature.jsx";
 import logoUrl from "./assets/logo.jpg";
-import headerLogoUrl from "./assets/header-logo.png";
 
-// The header links: each the view it opens (set capitalised; see index.css).
-const NAV = ["home", "artists", "gallery", "happenings", "info", "contact"];
+// The header links: the view each opens, and how it reads. (Home is the
+// site's name at the left of the header.)
+const NAV = [
+  ["artists", "artists"],
+  ["gallery", "gallery"],
+  ["happenings", "happenings"],
+  ["info", "info"],
+  ["contact", "contact"],
+];
 
 // How long (ms) the sheet waits for its settings before going ahead without
 // them.
@@ -105,6 +112,12 @@ function App() {
   // the page's way back to the calendar.
   const [eventShown, setEventShown] = useState(false);
   const calendarBack = useRef(null);
+  // Whether the header's menu is open (on a phone the links are behind a
+  // button; see index.css).
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Whether the header shows the site's name as a drawing (see Signature.jsx)
+  // or as text: a setting in Sanity, the drawing until it says otherwise.
+  const [headerDrawing, setHeaderDrawing] = useState(true);
   // Where the sheet rests (see the layout below), kept for the scene when it
   // is made.
   const restRef = useRef(0);
@@ -115,8 +128,12 @@ function App() {
     // How long a drawing stays is a setting in Sanity, and the ink is timed
     // from it, so it's read before the sheet is made. If it's slow to answer
     // the paper doesn't wait: the built-in lifespan stands for this visit.
+    const settings = fetchSettings().catch(() => null);
+    settings.then(
+      (s) => !cancelled && setHeaderDrawing(s?.headerDrawing !== false),
+    );
     Promise.race([
-      fetchSettings().catch(() => null),
+      settings,
       new Promise((resolve) => setTimeout(resolve, SETTINGS_WAIT, null)),
     ])
       .then(
@@ -238,6 +255,19 @@ function App() {
     });
   }, [view, artistSlug]);
 
+  // Esc closes the menu (before the page's own Esc, which would close the
+  // view behind it).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [menuOpen]);
+
   return (
     <>
       <div
@@ -249,16 +279,53 @@ function App() {
       <div className={`opening${ready ? " gone" : ""}`} aria-hidden={ready}>
         life is beautiful
       </div>
-      <header className={`site-header${ready ? " ready" : ""}`}>
-        <nav>
-          {NAV.map((item) => (
+      {/* Behind the header's menu on a phone: blurs the page, and a tap on it
+          closes the menu. */}
+      <div
+        className={`menu-wash${menuOpen ? " open" : ""}`}
+        onClick={() => setMenuOpen(false)}
+        aria-hidden="true"
+      />
+      <header
+        className={`site-header${ready ? " ready" : ""}${view === "home" ? " home" : ""}${menuOpen ? " menu-open" : ""}`}
+      >
+        <a
+          className="site-name"
+          href="#"
+          aria-label="life is beautiful, home"
+          // Home without following the bare "#", which would scroll the page
+          // to its very top: on a phone it's held scrolled down a little (see
+          // fullBleed.js), so the sheet would jump for a frame.
+          onClick={(e) => {
+            e.preventDefault();
+            setMenuOpen(false);
+            goHome();
+          }}
+        >
+          {headerDrawing ? <Signature /> : "life is beautiful"}
+        </a>
+        <button
+          type="button"
+          className="menu-toggle"
+          aria-label={menuOpen ? "Close the menu" : "Open the menu"}
+          aria-expanded={menuOpen}
+          aria-controls="site-nav"
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          <span />
+          <span />
+        </button>
+        <nav id="site-nav">
+          {NAV.map(([item, label], i) => (
             <a
               key={item}
               href={`#${item}`}
               // The label again, for the width its bold self takes (index.css).
-              data-label={item}
+              data-label={label}
               className={section === item ? "active" : undefined}
+              style={{ "--i": i }}
               onClick={(e) => {
+                setMenuOpen(false);
                 // Clicking the open view's link again closes it (from an
                 // artist's page, it goes back to the list; from an event
                 // filling the screen, back to the calendar).
@@ -270,7 +337,7 @@ function App() {
                 }
               }}
             >
-              {item}
+              {label}
             </a>
           ))}
         </nav>

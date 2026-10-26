@@ -31,6 +31,16 @@
   font-display: swap;
 }
 
+:root {
+  /* The paper's colour as it shows on screen, for the halo around the
+     header, the artist list and the info text: it covers ink under them like
+     a mask, rather than glowing white. */
+  --paper: rgb(236, 238, 238);
+  /* The same, part see-through: the fainter halo of the artist list and the
+     info text. */
+  --paper-soft: rgba(236, 238, 238, 0.55);
+}
+
 html,
 body {
   font-family: 'Rigid Square Arrows', system-ui, sans-serif;
@@ -118,8 +128,9 @@ body {
   opacity: 1;
 }
 
-/* Header over the top of the sheet: logo and links only (the paper shows
-   through, and everywhere else stays drawable). */
+/* Header over the top of the sheet: the site's name and the links only, the
+   paper showing through. The whole strip takes the pointer, so nothing is
+   drawn under it. */
 .site-header {
   position: fixed;
   top: env(safe-area-inset-top, 0px);
@@ -134,7 +145,9 @@ body {
   gap: clamp(20px, 2.6vw, 37px);
   padding: 10px clamp(16px, 2.2vw, 32px);
   padding-left: calc(clamp(16px, 2.2vw, 32px) + env(safe-area-inset-left, 0px));
-  pointer-events: none;
+  /* A finger dragged on it doesn't scroll the page (the sheet under it
+     doesn't either); taps still go through to the links. */
+  touch-action: none;
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   font-weight: 350;
@@ -148,21 +161,33 @@ body {
   text-decoration: none;
 }
 
+/* The logo at the top left, the links at the top right. */
 .site-header nav {
   display: flex;
+  margin-left: auto;
   gap: clamp(18px, 2.6vw, 37px);
+  font-size: 15px;
   opacity: 0.85;
-  /* A soft white glow all around the letters. */
-  /* text-shadow: 0 0 7px rgba(255, 255, 255, 0.95); */
+  transition: text-shadow 0.4s ease;
+}
+
+/* On the plain sheet (not on a phone, where the links are in a menu), a
+   paper-coloured halo masks any ink under them. */
+@media (min-width: 601px) {
+  .site-header.home nav {
+    text-shadow:
+      0 0 2px var(--paper),
+      0 0 4px var(--paper),
+      0 0 8px var(--paper),
+      0 1px 16px var(--paper);
+  }
 }
 
 /* Inter is a variable face, so a link can grow into its bold weight rather
    than snapping to it. Centred in the bold width it keeps, it grows out
-   from its middle rather than off to the right. The names are capitalised
-   here; in the code they're the lowercase views they open. */
+   from its middle rather than off to the right. */
 .site-header nav a {
   text-align: center;
-  text-transform: capitalize;
   transition: font-weight 0.3s ease;
 }
 
@@ -181,11 +206,146 @@ body {
   font-weight: 500;
 }
 
-/* On a phone the six links only fit across set a little smaller and closer. */
-@media (max-width: 480px) {
+/* The menu button and the wash behind the menu, for a phone (below). */
+.menu-toggle,
+.menu-wash {
+  display: none;
+}
+
+/* On a phone the links are behind a menu button at the right of the header:
+   two lines that cross into an ×. Opening it blurs the page behind and shows
+   the links one under another in the middle of the screen, each blurring
+   into focus a moment after the one above. */
+@media (max-width: 600px) {
+  .menu-toggle {
+    display: block;
+    position: relative;
+    z-index: 1;
+    width: 32px;
+    height: 32px;
+    margin: 0 -6px 0 auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    pointer-events: auto;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .menu-toggle span {
+    position: absolute;
+    left: 7px;
+    right: 7px;
+    height: 1.5px;
+    background: currentColor;
+    transition:
+      top 0.3s ease,
+      transform 0.3s ease;
+  }
+
+  /* The same paper-coloured halo as the links have on a desktop, always. */
+  .menu-toggle span {
+    box-shadow:
+      0 0 2px var(--paper),
+      0 0 4px var(--paper),
+      0 0 8px var(--paper),
+      0 1px 16px var(--paper);
+  }
+
+  .menu-toggle span:first-child {
+    top: 12px;
+  }
+
+  .menu-toggle span:last-child {
+    top: 18.5px;
+  }
+
+  .menu-open .menu-toggle span:first-child,
+  .menu-open .menu-toggle span:last-child {
+    top: 15.25px;
+  }
+
+  .menu-open .menu-toggle span:first-child {
+    transform: rotate(45deg);
+  }
+
+  .menu-open .menu-toggle span:last-child {
+    transform: rotate(-45deg);
+  }
+
+  /* The links hang from the header's right-hand end, under the button. They
+     have no background of their own: Safari tints its status bar and toolbar
+     to match a fixed box with one at the screen's edge, and keeps the tint
+     after it goes. The wash behind them (below) isn't fixed, like the artist
+     page, so it reaches behind the bars without that. */
   .site-header nav {
-    gap: clamp(8px, 3vw, 18px);
-    font-size: clamp(13px, 3.8vw, 16px);
+    position: absolute;
+    top: 100%;
+    right: 0;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    margin-top: 3px;
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+    font-size: 22px;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 0.35s ease,
+      visibility 0s linear 0.35s;
+  }
+
+  .menu-open nav {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.35s ease;
+  }
+
+  .menu-wash {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: calc(100vh + var(--overhang, 0px));
+    height: calc(100lvh + var(--overhang, 0px));
+    z-index: 3;
+    touch-action: none;
+    background: rgba(238, 238, 235, 0.55);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 0.35s ease,
+      visibility 0s linear 0.35s;
+  }
+
+  .menu-wash.open {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.35s ease;
+  }
+
+  .site-header nav a {
+    /* Growing bold leftward from their right edge. */
+    text-align: right;
+    opacity: 0;
+    filter: blur(6px);
+    transition:
+      opacity 0.25s ease,
+      filter 0.25s ease,
+      font-weight 0.3s ease;
+  }
+
+  .menu-open nav a {
+    opacity: 0.85;
+    filter: blur(0);
+    transition:
+      opacity 0.5s ease calc(0.08s + var(--i, 0) * 0.04s),
+      filter 0.6s ease calc(0.08s + var(--i, 0) * 0.04s),
+      font-weight 0.3s ease;
   }
 }
 
@@ -199,10 +359,9 @@ body {
   pointer-events: none;
 }
 
-/* The artist list (#artists): left-aligned, in the middle of the screen over
-   the logo and whatever is drawn there (the sheet stays put). Set in Inter
-   and multiplied onto the sheet, so the paper's grain and light show through
-   as if printed. The names blur into focus as they fade in, each a moment
+/* The artist list (#artists): centred, in the middle of the screen over
+   the logo and whatever is drawn there (the sheet stays put). Set in Inter,
+   in a paper-coloured halo that masks the ink around them. The names blur into focus as they fade in, each a moment
    after the one above; they fade out together. Hovering a name smoothly
    bolds it. Only the names themselves take the pointer (and only while
    shown). */
@@ -218,19 +377,35 @@ body {
   padding: 0;
   list-style: none;
   transform: translateY(-50%);
-  text-align: left;
+  text-align: center;
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 20px;
-  font-weight: 350;
-  line-height: 32px;
-  letter-spacing: -0.08em;
+  font-size: 24px;
+  font-weight: 450;
+  line-height: 40px;
+  letter-spacing: -0.06em;
   color: #434a47;
-  mix-blend-mode: multiply;
+  /* The header's paper-coloured halo, fainter, so ink under the letters is
+     softened rather than hidden. */
+  text-shadow:
+    0 0 2px var(--paper-soft),
+    0 0 4px var(--paper-soft),
+    0 0 8px var(--paper-soft),
+    0 1px 16px var(--paper-soft);
   pointer-events: none;
 }
 
+/* A little larger again on a desktop. */
+@media (min-width: 601px) {
+  .artists {
+    font-size: 27px;
+    line-height: 46px;
+  }
+}
+
+/* Each name centred under the one above. */
 .artists li {
   width: fit-content;
+  margin: 0 auto;
   opacity: 0;
   filter: blur(6px);
   transition:
@@ -251,7 +426,7 @@ body {
 }
 
 .artists.open li:hover {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .artists a {
@@ -260,8 +435,8 @@ body {
 }
 
 /* The info text (#info), in the middle of the screen over the logo (the sheet
-   stays put); its width is set by App.jsx. Multiplied onto the sheet like the
-   artist list, and blurring into focus the same way. */
+   stays put); its width is set by App.jsx. In the same halo as the artist
+   list, and blurring into focus the same way. */
 .info-text {
   position: fixed;
   z-index: 1;
@@ -272,12 +447,21 @@ body {
   margin: 0 auto;
   transform: translateY(-50%);
   font-family: 'Inter', system-ui, -apple-system, 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-size: 19px;
+  font-size: 21px;
   font-weight: 350;
-  line-height: 1.65;
+  line-height: 1.48;
   letter-spacing: -0.08em;
+  /* Line breaks chosen across the whole paragraph for an even rag (and no
+     word left alone on the last line). */
+  text-wrap: pretty;
   color: #434a47;
-  mix-blend-mode: multiply;
+  /* The header's paper-coloured halo, fainter, so ink under the letters is
+     softened rather than hidden. */
+  text-shadow:
+    0 0 2px var(--paper-soft),
+    0 0 4px var(--paper-soft),
+    0 0 8px var(--paper-soft),
+    0 1px 16px var(--paper-soft);
   pointer-events: none;
 }
 
@@ -349,7 +533,7 @@ body {
 
 @media (max-width: 600px) {
   .info-text {
-    font-size: 17px;
+    font-size: 18px;
   }
 }
 
@@ -1469,11 +1653,6 @@ body {
     margin-left: 0;
   }
 
-  /* The links sit over at the right, away from the logo. */
-  .site-header nav {
-    margin-left: auto;
-  }
-
   /* The calendar above the chosen event. */
   .hp-inner {
     grid-template-columns: minmax(0, 1fr);
@@ -1542,18 +1721,64 @@ body {
   }
 }
 
-.site-logo {
-  display: block;
+/* The site's name at the left of the header, the way home: a recorded
+   drawing of it (see Signature.jsx), or the name in bold text if there isn't
+   one; either in the header's paper-coloured halo. */
+.site-name {
   flex: none;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-shadow:
+    0 0 2px var(--paper),
+    0 0 4px var(--paper),
+    0 0 8px var(--paper),
+    0 1px 16px var(--paper);
 }
 
-.site-logo img {
+/* The drawing (see Signature.jsx), at a fixed height: each step of the nib
+   is filled, and outlined with a hairline so the strokes along the nib's
+   slant don't vanish. */
+.signature {
   display: block;
-  width: 56px;
-  height: 56px;
-  /* The same soft white glow as the links, following the logo's lines
-     (drop-shadow traces the transparent image, not its box). */
-  filter: drop-shadow(0 0 3.5px rgba(255, 255, 255, 0.95));
+  /* A little lower than the links' middle, clear of the top edge. */
+  position: relative;
+  top: 10px;
+  height: 65px;
+  width: calc(65px * var(--aspect, 3.5));
+  overflow: visible;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 1px var(--paper)) drop-shadow(0 0 3px var(--paper)) drop-shadow(0 0 8px var(--paper));
+  transition: opacity 1.5s ease-in-out;
+}
+
+/* Fading away slowly before the next is written out. */
+.signature.clearing {
+  opacity: 0;
+}
+
+/* Each step shows at the moment it was drawn (its delay is set in
+   Signature.jsx), once the header has appeared. */
+.signature path {
+  animation: signature-step 0.05s linear both;
+}
+
+.site-header:not(.ready) .signature path {
+  animation-play-state: paused;
+}
+
+@keyframes signature-step {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signature path {
+    animation: none;
+  }
 }
 
 .hint {
