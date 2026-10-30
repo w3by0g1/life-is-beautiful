@@ -383,7 +383,7 @@ body {
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 20px;
   font-weight: 400;
-  line-height: 34px;
+  line-height: 30px;
   letter-spacing: -0.06em;
   color: var(--text);
   /* The header's paper-coloured halo, fainter, so ink under the letters is
@@ -400,7 +400,7 @@ body {
 @media (min-width: 601px) {
   .artists {
     font-size: 23px;
-    line-height: 39px;
+    line-height: 34px;
   }
 }
 
