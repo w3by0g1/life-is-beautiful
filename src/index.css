@@ -32,6 +32,10 @@
 }
 
 :root {
+  /* The text's colour: a soft, beige-ish brown (its RGB channels too, for
+     see-through shades of it). */
+  --text-rgb: 108, 81, 58;
+  --text: rgb(var(--text-rgb));
   /* The paper's colour as it shows on screen, for the halo around the
      header, the artist list and the info text: it covers ink under them like
      a mask, rather than glowing white. */
@@ -103,7 +107,7 @@ body {
   font-size: clamp(34px, 7vw, 64px);
   font-weight: 350;
   letter-spacing: -0.08em;
-  color: #434a47;
+  color: var(--text);
   mix-blend-mode: multiply;
   pointer-events: none;
   transition: opacity 0.6s ease;
@@ -152,7 +156,7 @@ body {
   font-size: 16px;
   font-weight: 350;
   letter-spacing: -0.04em;
-  color: #434a47;
+  color: var(--text);
 }
 
 .site-header a {
@@ -161,10 +165,10 @@ body {
   text-decoration: none;
 }
 
-/* The logo at the top left, the links at the top right. */
+/* The links at the top left, just after the site's name (on a phone they're
+   in the menu instead; see below). */
 .site-header nav {
   display: flex;
-  margin-left: auto;
   gap: clamp(18px, 2.6vw, 37px);
   font-size: 15px;
   opacity: 0.85;
@@ -360,31 +364,28 @@ body {
   pointer-events: none;
 }
 
-/* The artist list (#artists): centred, in the middle of the screen over
-   the logo and whatever is drawn there (the sheet stays put). Set in Inter,
-   in a paper-coloured halo that masks the ink around them. The names blur into focus as they fade in, each a moment
-   after the one above; they fade out together. Hovering a name smoothly
-   bolds it. Only the names themselves take the pointer (and only while
-   shown). */
+/* The artist list (#artists) beside the logo, the sheet panned over to make
+   room: right-aligned, level with the logo's middle; placed by App.jsx. Set
+   in Inter, in a paper-coloured halo that softens the ink around them. The
+   names blur into focus as they fade in, once the pan has mostly settled,
+   each a moment after the one above; they fade out together. Hovering a name
+   smoothly bolds it. Only the names themselves take the pointer (and only
+   while shown). */
 .artists {
   position: fixed;
   z-index: 1;
-  top: 50%;
-  left: 0;
-  right: 0;
-  width: fit-content;
-  max-width: calc(100% - 32px);
-  margin: 0 auto;
+  margin: 0;
   padding: 0;
   list-style: none;
   transform: translateY(-50%);
-  text-align: center;
+  text-align: right;
+  white-space: nowrap;
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 24px;
-  font-weight: 450;
-  line-height: 40px;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 34px;
   letter-spacing: -0.06em;
-  color: #434a47;
+  color: var(--text);
   /* The header's paper-coloured halo, fainter, so ink under the letters is
      softened rather than hidden. */
   text-shadow:
@@ -398,21 +399,33 @@ body {
 /* A little larger again on a desktop. */
 @media (min-width: 601px) {
   .artists {
-    font-size: 27px;
-    line-height: 46px;
+    font-size: 23px;
+    line-height: 39px;
   }
 }
 
-/* Each name centred under the one above. */
+/* On a narrow screen the names sit centred above the logo (the sheet pans up
+   to make room; see layout.js), so the list hangs from its bottom edge. */
+.artists.tall {
+  transform: translateY(-100%);
+  text-align: center;
+  white-space: normal;
+}
+
+/* Each name right-aligned under the one above, or centred there. */
 .artists li {
   width: fit-content;
-  margin: 0 auto;
+  margin-left: auto;
   opacity: 0;
   filter: blur(6px);
   transition:
     opacity 0.35s ease,
     filter 0.35s ease,
     font-weight 0.3s ease;
+}
+
+.artists.tall li {
+  margin-right: auto;
 }
 
 .artists.open li {
@@ -427,12 +440,21 @@ body {
 }
 
 .artists.open li:hover {
-  font-weight: 600;
+  font-weight: 550;
 }
 
 .artists a {
   color: inherit;
   text-decoration: none;
+  transition: opacity 0.25s ease;
+}
+
+/* Hovering a name fades the others back, so it stands out. (On the link, not
+   the name: the name's own opacity is its staggered fade-in, which waits.) */
+@media (hover: hover) and (pointer: fine) {
+  .artists.open:has(li:hover) li:not(:hover) a {
+    opacity: 0.4;
+  }
 }
 
 /* The info text (#info), in the middle of the screen over the logo (the sheet
@@ -455,7 +477,7 @@ body {
   /* Line breaks chosen across the whole paragraph for an even rag (and no
      word left alone on the last line). */
   text-wrap: pretty;
-  color: #434a47;
+  color: var(--text);
   /* The header's paper-coloured halo, fainter, so ink under the letters is
      softened rather than hidden. */
   text-shadow:
@@ -517,7 +539,7 @@ body {
 }
 
 .info-links a:hover {
-  color: #434a47;
+  color: var(--text);
 }
 
 .info-text strong {
@@ -665,7 +687,7 @@ body {
   font-family: 'Rigid Square Arrows', 'Neue Haas Grotesk Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 23px;
   letter-spacing: 0;
-  color: #434a47;
+  color: var(--text);
   text-decoration: none;
 }
 
@@ -720,7 +742,7 @@ body {
 }
 
 .ap-links a:hover {
-  color: #434a47;
+  color: var(--text);
 }
 
 .ap-links svg {
@@ -797,7 +819,7 @@ body {
   font-weight: 400;
   line-height: 1.05;
   letter-spacing: -0.01em;
-  color: #434a47;
+  color: var(--text);
 }
 
 .ap-listen {
@@ -805,8 +827,8 @@ body {
   margin-top: 4px;
   padding: 1px 5px 2px;
   background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgb(67, 74, 71, 0.5);
-  color: rgba(67, 74, 71, 1);
+  border: 1px solid rgba(var(--text-rgb), 0.5);
+  color: rgba(var(--text-rgb), 1);
   font-family: 'Rigid Square Arrows', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 12px;
   font-weight: 500;
@@ -855,7 +877,7 @@ body {
   margin-top: 15px;
   padding-top: 15px;
   border-top: 1px solid;
-  border-image: linear-gradient(to right, transparent, rgba(67, 74, 71, 0.25) 20%, rgba(67, 74, 71, 0.25) 80%, transparent) 1;
+  border-image: linear-gradient(to right, transparent, rgba(var(--text-rgb), 0.25) 20%, rgba(var(--text-rgb), 0.25) 80%, transparent) 1;
 }
 
 /* Wrapped lines hang under the title, not the number. */
@@ -1031,7 +1053,7 @@ body {
   font-size: 32px;
   font-weight: 350;
   letter-spacing: -0.08em;
-  color: #434a47;
+  color: var(--text);
 }
 
 .hp-grid {
@@ -1118,7 +1140,7 @@ body {
   transform: scale(1.08);
   box-shadow:
     0 10px 26px rgba(0, 0, 0, 0.22),
-    0 0 0 1px #434a47;
+    0 0 0 1px var(--text);
 }
 
 /* On a desktop, hovering one does the same. */
@@ -1131,7 +1153,7 @@ body {
 }
 
 .hp-day.chosen {
-  box-shadow: 0 0 0 1px #434a47;
+  box-shadow: 0 0 0 1px var(--text);
 }
 
 .hp-day img {
@@ -1146,7 +1168,7 @@ body {
   right: 4px;
   bottom: 4px;
   padding: 1px 4px;
-  background: #434a47;
+  background: var(--text);
   color: #fff;
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 11px;
@@ -1206,7 +1228,7 @@ body {
   font-weight: 400;
   line-height: 1.15;
   letter-spacing: -0.01em;
-  color: #434a47;
+  color: var(--text);
 }
 
 /* Back to the calendar, before the event's title. */
@@ -1231,7 +1253,7 @@ body {
 
 .hp-details .ap-meta {
   line-height: auto;
-  color: #434a47;
+  color: var(--text);
 }
 
 .hp-lineup {
@@ -1242,7 +1264,7 @@ body {
   -webkit-line-clamp: 3;
   font-size: 15px;
   line-height: 18px;
-  color: #434a47;
+  color: var(--text);
 }
 
 .hp-lineup a {
@@ -1303,7 +1325,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 28px;
-  color: #434a47;
+  color: var(--text);
 }
 
 .ct-field {
@@ -1326,10 +1348,10 @@ body {
   margin: 0;
   padding: 6px 0 8px;
   border: 0;
-  border-bottom: 1px solid rgba(67, 74, 71, 0.35);
+  border-bottom: 1px solid rgba(var(--text-rgb), 0.35);
   border-radius: 0;
   background: transparent;
-  color: #434a47;
+  color: var(--text);
   /* 16px or more, or a phone zooms in on the field when it's tapped. */
   font: inherit;
   font-size: 19px;
@@ -1348,7 +1370,7 @@ body {
 
 .ct-field input:focus,
 .ct-field textarea:focus {
-  border-bottom-color: #434a47;
+  border-bottom-color: var(--text);
 }
 
 .ct-actions {
@@ -1462,7 +1484,7 @@ body {
   position: relative;
   overflow: hidden;
   aspect-ratio: var(--ar);
-  background: rgba(67, 74, 71, 0.06);
+  background: rgba(var(--text-rgb), 0.06);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
@@ -1490,7 +1512,7 @@ body {
   margin-top: 10px;
   font-size: 15px;
   line-height: 1.4;
-  color: #434a47;
+  color: var(--text);
 }
 
 .gl-credit {
@@ -1559,7 +1581,7 @@ body {
   padding: 12px;
   border: 0;
   background: none;
-  color: #434a47;
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -1738,8 +1760,8 @@ body {
 }
 
 /* The site's name at the left of the header, the way home: a recorded
-   drawing of it (see Signature.jsx), or the name in bold text if there isn't
-   one; either in the header's paper-coloured halo. */
+   drawing of it (see Signature.jsx), or the logo; either in the header's
+   paper-coloured halo. */
 .site-name {
   flex: none;
   font-size: 15px;
@@ -1750,6 +1772,15 @@ body {
     0 0 4px var(--paper),
     0 0 8px var(--paper),
     0 1px 16px var(--paper);
+}
+
+/* The logo, its halo following its lines (drop-shadow traces the
+   transparent image, not its box). */
+.header-logo {
+  display: block;
+  width: 56px;
+  height: 56px;
+  filter: drop-shadow(0 0 1px var(--paper)) drop-shadow(0 0 3px var(--paper)) drop-shadow(0 0 10px var(--paper));
 }
 
 /* The drawing (see Signature.jsx), at a fixed height: each step of the nib

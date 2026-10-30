@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPaperScene } from "./paperScene.js";
-import { infoTextWidth, isTall, tallTextWidth } from "./layout.js";
+import {
+  artistsLayout,
+  artistsLayoutTall,
+  infoTextWidth,
+  isTall,
+  tallTextLeft,
+  tallTextWidth,
+} from "./layout.js";
 import { ARTISTS } from "./artists.js";
 import { fetchArtists, fetchInfo, fetchSettings } from "./sanity.js";
 import { setInkLifespan } from "./ink.js";
@@ -10,6 +17,7 @@ import HappeningsPage from "./HappeningsPage.jsx";
 import ContactPage from "./ContactPage.jsx";
 import GalleryPage from "./GalleryPage.jsx";
 import Signature from "./Signature.jsx";
+import headerLogoUrl from "./assets/header-logo.png";
 import logoUrl from "./assets/logo.jpg";
 
 // The header links: the view each opens, and how it reads. (Home is the
@@ -26,8 +34,8 @@ const NAV = [
 // them.
 const SETTINGS_WAIT = 700;
 
-// Which view the address asks for: "#artists" shows the artist list over the
-// middle of the sheet, "#artists/<slug>" opens that artist's page over it,
+// Which view the address asks for: "#artists" pans the sheet over and shows
+// the artist list beside the logo, "#artists/<slug>" opens that artist's page over it,
 // "#gallery" shows the gallery, "#happenings" shows the calendar, "#info"
 // shows the info text over the middle of the sheet, "#contact" shows the
 // contact form; anything else is the plain sheet.
@@ -55,6 +63,11 @@ const overSheet = (view, slug) =>
 // writing set over it.
 const inkShownIn = (view, slug) =>
   view === "home" || overSheet(view, slug) ? 1 : 0;
+
+// The site's logo, at the left of the header when it isn't showing a drawing.
+const HeaderLogo = () => (
+  <img className="header-logo" src={headerLogoUrl} alt="" />
+);
 
 // Shown until the info text loads from Sanity (or if it can't).
 const INFO_FALLBACK = [
@@ -102,6 +115,20 @@ function App() {
   );
   // How wide the info text is set (see layout.js).
   const [infoWidth, setInfoWidth] = useState(400);
+  // Where the artist list sits (fixed-position CSS) and how far the sheet pans
+  // so the logo makes room for it: right on a wide screen, with the list
+  // beside the logo, and up on a narrow one (`tall`), with the list above it
+  // (see layout.js).
+  const [listLayout, setListLayout] = useState({
+    tall: false,
+    pan: 0,
+    right: 0,
+    top: 0,
+    panY: 0,
+    bottom: 0,
+    left: 0,
+    width: 0,
+  });
   // The info text, with the marks that go under it (all from Sanity).
   const [info, setInfo] = useState({ text: INFO_FALLBACK });
   // Whether the sheet has appeared; until it has, the page is the paper's
@@ -121,6 +148,15 @@ function App() {
   // Where the sheet rests (see the layout below), kept for the scene when it
   // is made.
   const restRef = useRef(0);
+  // Only the artists view pans the sheet: across on a wide screen, up on a
+  // narrow one.
+  const listRef = useRef(null);
+  const panX = view === "artists" && !listLayout.tall ? listLayout.pan : 0;
+  const panY = view === "artists" && listLayout.tall ? listLayout.panY : 0;
+  const panRef = useRef([panX, panY]);
+  // How far the artists view pans (set by the layout below before the scene
+  // is made), so the sheet is built with that much paper around it.
+  const panExtentRef = useRef({ left: 0, right: 0, top: 0, bottom: 0 });
 
   useEffect(() => {
     let dispose;
@@ -145,6 +181,7 @@ function App() {
       .then(() => {
         if (cancelled) return null;
         return createPaperScene(containerRef.current, logoUrl, {
+          panExtent: panExtentRef.current,
           onReady: () => !cancelled && setReady(true),
         });
       })
@@ -154,6 +191,7 @@ function App() {
         dispose = d;
         sceneRef.current = d;
         d.setRest(restRef.current);
+        d.setPan(...panRef.current);
         d.setDrawing(viewFromHash() === "home", {
           inkShown: inkShownIn(viewFromHash(), artistFromHash()),
         });
@@ -218,7 +256,8 @@ function App() {
     };
   }, []);
 
-  // Where the logo rests, and how wide the info text is set.
+  // Where the logo rests, how wide the info text is set, and where the artist
+  // list goes with how far the sheet pans for it.
   useLayoutEffect(() => {
     const place = () => {
       const r = containerRef.current.getBoundingClientRect();
@@ -230,6 +269,42 @@ function App() {
       sceneRef.current?.setRest(restY);
       restRef.current = restY;
       setInfoWidth(infoWidth);
+
+      const list = listRef.current;
+      const { pan, listRight } = artistsLayout(
+        r.width,
+        r.height,
+        list.offsetWidth,
+      );
+      // What of the sheet is on screen, in the scene's own coordinates: it
+      // starts above the top of the screen on phones (see fullBleed.js), the
+      // header covers its first stretch, and a phone browser's bar floats over
+      // the last.
+      const shown = {
+        top: 96 - r.top,
+        bottom: window.innerHeight - 56 - r.top,
+      };
+      const { middle, listBottom } = artistsLayoutTall(
+        r.width,
+        r.height,
+        list.offsetHeight,
+        shown,
+      );
+      const panY = middle - (r.height / 2 + restY);
+      panExtentRef.current = tall
+        ? { left: 0, right: 0, top: panY, bottom: 0 }
+        : { left: pan, right: 0, top: 0, bottom: 0 };
+      sceneRef.current?.setPanExtent(panExtentRef.current);
+      setListLayout({
+        tall,
+        pan,
+        right: window.innerWidth - (r.left + listRight),
+        top: r.top + r.height / 2,
+        panY,
+        bottom: r.top + listBottom,
+        left: r.left + tallTextLeft(r.width),
+        width: tallTextWidth(r.width),
+      });
     };
     place();
     window.addEventListener("resize", place);
@@ -237,14 +312,22 @@ function App() {
     // And whenever the scene itself changes size: on a first visit the
     // stylesheet can arrive after this first runs, with the scene still 0px
     // tall, which would leave the logo resting half a screen low.
+    // (And the list's, which decides the pan, as the names load and their
+    // font settles.)
     const observer = new ResizeObserver(place);
     observer.observe(containerRef.current);
+    observer.observe(listRef.current);
     return () => {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place);
       observer.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    panRef.current = [panX, panY];
+    sceneRef.current?.setPan(panX, panY);
+  }, [panX, panY]);
 
   // No drawing while the artists, the info, the gallery, the calendar or the
   // contact form are showing. The ink stays under the artist list and the
@@ -302,7 +385,11 @@ function App() {
             goHome();
           }}
         >
-          {headerDrawing ? <Signature /> : "life is beautiful"}
+          {headerDrawing ? (
+            <Signature fallback={<HeaderLogo />} />
+          ) : (
+            <HeaderLogo />
+          )}
         </a>
         <button
           type="button"
@@ -343,7 +430,17 @@ function App() {
         </nav>
       </header>
       <ul
-        className={`artists${view === "artists" ? " open" : ""}${ready ? " ready" : ""}`}
+        ref={listRef}
+        className={`artists${view === "artists" ? " open" : ""}${listLayout.tall ? " tall" : ""}${ready ? " ready" : ""}`}
+        style={
+          listLayout.tall
+            ? {
+                left: listLayout.left,
+                width: listLayout.width,
+                top: listLayout.bottom,
+              }
+            : { right: listLayout.right, top: listLayout.top }
+        }
         aria-hidden={view !== "artists"}
       >
         {artists.map(({ name, slug }, i) => (

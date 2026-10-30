@@ -169,8 +169,8 @@ function pick() {
   };
 }
 
-// Falls back to the name in text if there's no recording to show.
-export default function Signature() {
+// fallback: shown instead if there's no recording to show.
+export default function Signature({ fallback = null }) {
   const [drawing, setDrawing] = useState(pick);
   // Which redraw this is (a new one mounts fresh paths, so the steps write
   // out again), and whether the last is fading away.
@@ -193,7 +193,7 @@ export default function Signature() {
     };
   }, []);
 
-  if (!drawing) return "life is beautiful";
+  if (!drawing) return fallback;
   return (
     <svg
       key={run}

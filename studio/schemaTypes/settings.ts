@@ -19,7 +19,7 @@ export const settings = defineType({
       name: 'headerDrawing',
       title: 'Header: show a drawing',
       description:
-        'On: the site’s name at the top left is one of the recorded drawings, written out in calligraphy. Off: it’s the name in text.',
+        'On: the site’s name at the top left is one of the recorded drawings, written out in calligraphy. Off: it’s the logo.',
       type: 'boolean',
       initialValue: true,
     }),
