@@ -4,7 +4,6 @@ import { createFog, FOG_GLSL } from './fog.js'
 import { createInk, DEFAULT_PEN, PENS } from './ink.js'
 import { createHaze } from './haze.js'
 import { createIntro } from './intro.js'
-import { createTilt } from './tilt.js'
 import { createLiveSketch } from './liveSketch.js'
 import { LOGO_FRACTION } from './layout.js'
 import { generatePaperTextures } from './paperTextures.js'
@@ -27,26 +26,31 @@ const LIGHT_GAIN = 1.065
 // Total light on flat paper (before LIGHT_GAIN), in three.js intensity units.
 const FLAT_LIGHT = 3
 // Share of FLAT_LIGHT that is soft ambient light; lower gives darker shadows.
-const AMBIENT = 0.45
-// Height of the key light (it circles at radius 6); lower is more raking.
+const AMBIENT = 0.58
+// Height of the key light the cast shadows' length is tuned at (see
+// SHADOW_LENGTH; it circles at radius 6). Its actual height follows the sun:
+// KEY_LOW at sunrise, sunset and overnight, KEY_HIGH at noon (lower is more
+// raking, with longer shadows).
 const KEY_HEIGHT = 1.6
+const KEY_LOW = 1.2
+const KEY_HIGH = 2.4
 // Relief strength of the logo and of the paper fibres in the normal maps.
 const LOGO_STRENGTH = 11.5
 const FIBRE_STRENGTH = 0.35
 // Load animation: seconds before the logo starts rising, and how long it takes.
 const EMBOSS_DELAY = 1
 const EMBOSS_DURATION = 3
-// Light movement: how briskly the light swings toward the pointer (higher is
-// snappier; it eases in and out either way) and its idle drift speed (rad/s).
-const LIGHT_FOLLOW = 5
-const LIGHT_IDLE_SPEED = 0.25
-// On phones, tilting steers the light instead of touches (see tilt.js).
-// TILT_DEAD_ZONE: degrees of tilt ignored (below it the light drifts as when
-// idle). TILT_LIGHT_FROM_ABOVE: the light behaves like a lamp fixed overhead,
-// so tipping one edge down lights the sheet from the opposite side; false makes
-// the light follow the edge tipped down instead.
-const TILT_DEAD_ZONE = 3
-const TILT_LIGHT_FROM_ABOVE = true
+
+// The light is the sun, like a sundial's: at a given local time, where it comes
+// from across the sheet (radians: 0 from the right, the east, at 6am; -π/2 from
+// the top at noon; ±π from the left, the west, at 6pm; round through the bottom
+// overnight) and how high it stands (0 at sunrise, sunset and overnight, 1 at
+// noon).
+function sunAt(date) {
+  const h = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600
+  const day = ((h - 6) / 12) * Math.PI
+  return { angle: -day, up: Math.max(0, Math.sin(day)) }
+}
 // Click deboss: radius and soft edge width of the pressed area (world units;
 // the screen is 2 tall), how far the raised logo is pushed in (1 = as deep as
 // it was raised, 0 = just flattened), and how fast it presses in and springs
@@ -99,19 +103,19 @@ const INK_GAP_AFTER = true
 // reaches across the paper (the screen's shorter side is 2, so it stays the
 // same length relative to the logo on any screen shape) and how dark it is.
 const SHADOW_LENGTH = 0.08
-const SHADOW_STRENGTH = 0.45
+const SHADOW_STRENGTH = 0.32
 // Pool of light the key light throws on the paper: its centre sits POOL_OFFSET
 // from the middle toward the light and fades out over POOL_RADIUS (world units;
 // the screen is 2 tall). Inside it the paper brightens and warms slightly; away
 // from it the paper dims.
 const POOL_OFFSET = 1.1
 const POOL_RADIUS = 1.8
-const POOL_BRIGHT = 0.06
-const POOL_DARK = 0.1
+const POOL_BRIGHT = 0.04
+const POOL_DARK = 0.065
 const POOL_TINT = new THREE.Color(0xffffff)
 // Extra shade across the half of the page facing away from the light, deepening
 // from the middle to FAR_SIDE_REACH (world units) beyond it.
-const FAR_SIDE_DARK = 0.12
+const FAR_SIDE_DARK = 0.08
 const FAR_SIDE_REACH = 1.6
 // Strength of the vellum speckle and cloudy formation; 0 turns it off.
 const SPECKLE = 1
@@ -146,8 +150,8 @@ const FIBRE_COLOR = [171, 188, 195]
 // Paper colour: a diagonal linear gradient from the top-left corner to the
 // bottom-right, with faint fibre mottling and a vellum-style speckle.
 // Any CSS colour works: 'rgb(247, 251, 252)', '#f7fbfc', 'ivory', …
-const PAPER_FROM = 'rgb(247, 251, 252)'
-const PAPER_TO = 'rgb(229, 229, 229)'
+const PAPER_FROM = 'rgb(250, 247, 238)'
+const PAPER_TO = 'rgb(233, 227, 214)'
 
 // Haze over the whole scene, like light through tracing paper: blur (CSS px),
 // how much of the blurred scene is mixed in (0 = off), and a white wash over it.
@@ -320,13 +324,10 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   // ridges facing away from the key fall into darker shadow. The key's intensity
   // is derived so flat paper always receives the same total light (three.js
   // divides diffuse light by π), keeping the gradient colours exact.
-  const keyDistance = Math.hypot(KEY_HEIGHT, 6)
-  const keyFlatFactor = KEY_HEIGHT / keyDistance
+  // (Recomputed as the key's height follows the sun.)
+  const keyIntensity = (height) => ((FLAT_LIGHT - AMBIENT) / (height / Math.hypot(height, 6))) * LIGHT_GAIN
   scene.add(new THREE.HemisphereLight('#ffffff', '#ffffff', AMBIENT * LIGHT_GAIN))
-  const key = new THREE.DirectionalLight(
-    '#ffffff',
-    ((FLAT_LIGHT - AMBIENT) / keyFlatFactor) * LIGHT_GAIN,
-  )
+  const key = new THREE.DirectionalLight('#ffffff', keyIntensity(KEY_HEIGHT))
   scene.add(key)
 
   const logoImg = await loadImage(logoUrl)
@@ -838,6 +839,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     fitRemaps()
   }
 
+  let shadowAspect = 1
   const fit = () => {
     const [vw, vh] = viewSize()
     const aspect = vw / vh
@@ -853,8 +855,9 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     embossUniforms.paperAspect.value = aspect
     // Shadows are measured against the shorter side, like the logo, so they
     // keep the same length relative to it on tall phone screens (world units
-    // run 2 per screen height).
-    embossUniforms.shadowLength.value = SHADOW_LENGTH * Math.min(1, aspect)
+    // run 2 per screen height). (Their length is set each frame, with the
+    // sun's height.)
+    shadowAspect = Math.min(1, aspect)
     dust.setAspect(aspect)
     panUniforms()
     fitRemaps()
@@ -921,8 +924,6 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   })
   observer.observe(container)
 
-  // Mouse steers the light around the sheet; otherwise it drifts slowly.
-  const pointer = { x: 0, y: 0, active: false, touch: false }
   // Client position → world position on the sheet (x right, z down the screen),
   // and → ink canvas pixels.
   const toWorld = (e) => {
@@ -991,8 +992,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
 
   // Every finger draws its own stroke: each pointer holding the page takes a
   // pen of its own, from a handful of ids handed back as fingers lift. The one
-  // holding 'user' also presses the logo and steers the light; the rest only
-  // ink.
+  // holding 'user' also presses the logo; the rest only ink.
   const penIds = ['user']
   const pointerPens = new Map()
   const penFor = (pointerId) => {
@@ -1012,26 +1012,12 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     }
   }
 
-  // The user's pointer: also steers the light (a mouse always; a finger only
-  // where the phone's tilt isn't available).
-  const tilt = createTilt()
+  // The user's pointer: draws with whichever pen it pressed down.
   const onPointerMove = (e) => {
     const id = pointerPens.get(e.pointerId)
-    // Only a pointer that isn't drawing (a mouse moving over the sheet) or the
-    // one with the press moves the light; other fingers leave it be.
-    if ((!id || id === 'user') && !(tilt.active && e.pointerType === 'touch')) {
-      const r = renderer.domElement.getBoundingClientRect()
-      pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1
-      pointer.y = ((e.clientY - r.top) / r.height) * 2 - 1
-      pointer.active = true
-      pointer.touch = e.pointerType === 'touch'
-    }
     if (id) penMove(id, e)
   }
-  const onPointerLeave = (e) => {
-    pointer.active = false
-    release(e)
-  }
+  const onPointerLeave = (e) => release(e)
   const onPointerDown = (e) => {
     onPointerMove(e)
     penDown(penFor(e.pointerId), e)
@@ -1096,7 +1082,7 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   })
   // Pointer listeners: recorded for the intro (while recording) and sent live.
   // While drawing is off (see setDrawing) a press doesn't start a stroke (and
-  // isn't sent); the pointer still steers the light.
+  // isn't sent).
   let drawing = true
   // How much the ink shows, 0–1 (see setDrawing).
   let inkShown = 1
@@ -1104,10 +1090,20 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     const sent = live.listen(kind, fn)
     return intro.listen(kind, (e) => (kind === 'down' && !drawing ? onPointerMove(e) : sent(e)))
   }
+  const loggedDown = logged('down', onPointerDown)
   const listeners = [
     [renderer.domElement, 'pointermove', logged('move', onPointerMove)],
     [renderer.domElement, 'pointerleave', logged('leave', onPointerLeave)],
-    [renderer.domElement, 'pointerdown', logged('down', onPointerDown)],
+    // Only the main button draws (a finger or a pen counts as it). A right
+    // click, or a Mac's control-click, opens the browser's menu, which swallows
+    // the release and would leave the stroke and the press stuck; it isn't
+    // drawn, recorded or sent.
+    [renderer.domElement, 'pointerdown', (e) => {
+      if (e.button !== 0 || (e.pointerType === 'mouse' && e.ctrlKey)) return
+      loggedDown(e)
+    }],
+    // And no browser menu over the sheet at all.
+    [renderer.domElement, 'contextmenu', (e) => e.preventDefault()],
     [window, 'pointerup', logged('up', onPointerUp)],
     [window, 'pointercancel', logged('up', onPointerUp)],
     [window, 'keydown', (e) => {
@@ -1183,8 +1179,6 @@ export async function createPaperScene(container, logoUrl, options = {}) {
 
   const timer = new THREE.Timer()
   timer.connect(document)
-  let angle = -Math.PI * 0.75
-  let angleVel = 0
   let elapsed = 0
   // The ink keeps its own clock, on real time: the scene's stops while the
   // page is in another tab (nothing is being drawn to the screen), but ink
@@ -1240,30 +1234,16 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     // Let the shader skip the press maths when nothing is pressed.
     embossUniforms.pressActive.value = anyPressed ? 1 : 0
 
-    // The light swings with momentum: a critically damped spring toward the
-    // pointer's direction (shortest way round), or easing into a slow idle drift.
     const ldt = Math.min(dt, 0.1)
-    let accel
-    // Where the light is being steered to, if anywhere: the pointer, or the
-    // phone's tilt (x: right edge tipped down, y: top edge tipped up), lit from
-    // the edge tipped up (see TILT_LIGHT_FROM_ABOVE).
-    let target = null
-    if (pointer.active && !(tilt.active && pointer.touch)) target = Math.atan2(pointer.y, pointer.x)
-    else if (tilt.active && Math.hypot(tilt.x, tilt.y) > TILT_DEAD_ZONE) {
-      const s = TILT_LIGHT_FROM_ABOVE ? -1 : 1
-      target = Math.atan2(tilt.y * s, tilt.x * s)
-    }
-    if (target !== null) {
-      const diff = Math.atan2(Math.sin(target - angle), Math.cos(target - angle))
-      accel = LIGHT_FOLLOW * LIGHT_FOLLOW * diff - 2 * LIGHT_FOLLOW * angleVel
-    } else {
-      accel = LIGHT_FOLLOW * (LIGHT_IDLE_SPEED - angleVel)
-    }
-    angleVel += accel * ldt
-    angle += angleVel * ldt
-    // World +z is screen-down, so this puts the light on the pointer's side.
-    key.position.set(Math.cos(angle) * 6, KEY_HEIGHT, Math.sin(angle) * 6)
-    embossUniforms.lightDir.value.set(Math.cos(angle), Math.sin(angle))
+    // The light stands where the sun is now (see sunAt): its height sets how
+    // raking it is and how long the logo's shadows fall, and the key's
+    // strength keeps flat paper lit the same.
+    const sun = sunAt(new Date())
+    const height = KEY_LOW + (KEY_HIGH - KEY_LOW) * sun.up
+    key.position.set(Math.cos(sun.angle) * 6, height, Math.sin(sun.angle) * 6)
+    key.intensity = keyIntensity(height)
+    embossUniforms.lightDir.value.set(Math.cos(sun.angle), Math.sin(sun.angle))
+    embossUniforms.shadowLength.value = SHADOW_LENGTH * shadowAspect * (KEY_HEIGHT / height)
     // Clamp so a backgrounded tab doesn't make the dust jump when it resumes.
     dust.update(Math.min(dt, 0.1), elapsed, key.position)
     fog.update(Math.min(dt, 0.1), since, dust.wind)
@@ -1331,7 +1311,6 @@ export async function createPaperScene(container, logoUrl, options = {}) {
     clearInterval(hiddenTimer)
     document.removeEventListener('visibilitychange', onVisibility)
     timer.dispose()
-    tilt.dispose()
     clearTimeout(resizeTimer)
     observer.disconnect()
     for (const [target, type, fn] of listeners) target.removeEventListener(type, fn)
