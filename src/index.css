@@ -971,7 +971,11 @@ body {
   align-items: flex-start;
   justify-content: center;
   gap: 0;
-  max-width: 1440px;
+  /* The whole width of the screen (the calendar takes all of it the details
+     beside it leave; see .hp-calendar). */
+  max-width: none;
+  /* How wide the details come out beside the calendar, with the gap between. */
+  --side: 513px;
   padding: 36px 48px 80px;
   padding-top: calc(36px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
 }
@@ -1009,8 +1013,8 @@ body {
 }
 
 .hp-inner.has-event .hp-side {
-  /* The details, plus the 56px gap to the calendar. */
-  width: 457px;
+  /* The details, plus the 56px gap to the calendar (--side in all). */
+  width: calc(var(--side) - 56px);
   padding-left: 56px;
   opacity: 1;
   transition:
@@ -1022,19 +1026,17 @@ body {
   width: 401px;
 }
 
-/* As wide as its grid, so the pair centres as one. The days are sized so
-   that five weeks overfill the height left on screen (125%), the last week
-   or so running past the bottom; the months scroll. */
+/* As big as it can be: all the width the details leave beside it, whether
+   or not they're showing (so it doesn't change size as they slide out, only
+   moves over). Its weeks run on past the bottom of the screen as they need;
+   the months scroll. */
 .hp-calendar {
   /* The days of the week and the dates on the cells are set in Inter like
      the rest of the site. */
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   letter-spacing: normal;
   flex: 0 0 auto;
-  width: min(100%, calc(((100vh - var(--around)) * 1.25 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
-  width: min(100%, calc(((100svh - var(--around)) * 1.25 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
-  --gap: 12px;
-  --around: 204px;
+  width: calc(100% - var(--side));
 }
 
 .hp-month {
@@ -1055,14 +1057,10 @@ body {
 
 .hp-grid {
   --gap: 12px;
-  /* Everything on screen that isn't calendar cells: the space above (header
-     and month title), the day names, and a margin below. */
-  --around: 256px;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--gap);
-  /* Its section is sized so six weeks of A4 days fit in the height left on
-     screen, so the days are the same size in every month. */
+  /* As wide as the calendar, so the days are the same size in every month. */
   width: 100%;
 }
 
@@ -1125,31 +1123,85 @@ body {
 
 
 .hp-day.has-event {
-  /* A poster fills the day, with nothing around it. */
+  /* A poster fills the day, with nothing around it. (Not cut off at the
+     day's edge: the poster crops itself, so it can open out on hover.) */
+  overflow: visible;
   border: 0;
-  background: #fff;
+  /* No background: only the poster shows, and only it tilts. */
+  background: none;
   cursor: pointer;
+  /* (It stays over its neighbours until it has shrunk back, so they don't
+     cut across it on the way down.) */
+  z-index: 0;
   transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease;
+    transform 0.3s ease,
+    box-shadow 0.3s ease,
+    filter 0.3s ease,
+    z-index 0s linear 0.3s;
 }
 
-/* The chosen poster stays lifted off the page: a little bigger, with a
-   shadow, and over its neighbours. */
+/* The chosen poster stays as it is hovered (below), so it doesn't drop back
+   when the calendar slides over for its details: lifted, whole, with its
+   shadow, over its neighbours (under a hovered one), and outlined in the
+   text's colour round the poster itself. */
 .hp-day.has-event.chosen {
-  z-index: 1;
-  transform: scale(1.14);
-  box-shadow:
-    0 10px 26px rgba(var(--text-rgb), 0.22),
-    0 0 0 1px var(--text);
+  z-index: 2;
+  transform: scale(1.7);
+  box-shadow: none;
+  filter: drop-shadow(0 10px 18px rgba(var(--text-rgb), 0.25));
 }
 
-/* On a desktop, hovering one does the same. */
+.hp-day.has-event.chosen img {
+  clip-path: inset(0);
+  outline: 1px solid var(--text);
+  outline-offset: -1px;
+}
+
+.hp-day.has-event.chosen::after {
+  width: calc(100% * var(--wide));
+  height: calc(100% * var(--tall));
+}
+
+/* On a desktop, hovering one lifts it too (further, and uncropped). */
 @media (hover: hover) and (pointer: fine) {
+  /* Hovering one lifts it further and shows the poster whole, uncropped,
+     its shadow following the poster's own shape. */
   .hp-day.has-event:hover {
+    z-index: 3;
+    /* (So does the chosen poster's, above, and HOVER_SCALE in
+       HappeningsPage.jsx.) */
+    transform: scale(1.7);
+    box-shadow: none;
+    filter: drop-shadow(0 10px 18px rgba(var(--text-rgb), 0.25));
+  }
+
+  .hp-day.has-event:hover img {
+    clip-path: inset(0);
+  }
+
+  .hp-day.has-event:hover::after {
+    width: calc(100% * var(--wide));
+    height: calc(100% * var(--tall));
+  }
+
+  /* (Over its neighbours at once on the way up.) */
+  .hp-day.has-event:hover {
+    transition:
+      transform 0.3s ease,
+      box-shadow 0.3s ease,
+      filter 0.3s ease,
+      z-index 0s;
+  }
+
+  /* Moving from one poster to the next, the one shrinking back drops under
+   the newly hovered one at once (still over the days around it). */
+  .hp-grid:has(.hp-day.has-event:hover) .hp-day.has-event:not(:hover) {
     z-index: 1;
-    transform: scale(1.14);
-    box-shadow: 0 10px 26px rgba(var(--text-rgb), 0.22);
+    transition:
+      transform 0.3s ease,
+      box-shadow 0.3s ease,
+      filter 0.3s ease,
+      z-index 0s;
   }
 }
 
@@ -1157,11 +1209,46 @@ body {
   box-shadow: 0 0 0 1px var(--text);
 }
 
+/* The poster at its own shape, just big enough to cover the day (--ar, its
+   width over its height, against the day's 3:4), centred on it and clipped
+   to it; on hover the clip opens to show it whole. */
+.hp-day.has-event {
+  --wide: max(1, var(--ar, 0.75) / 0.75);
+  --tall: max(1, 0.75 / var(--ar, 0.75));
+}
+
+/* The poster at its own shape (above), tilted toward the mouse when hovered
+   (--tx, --ty, set in HappeningsPage.jsx). It takes no pointer itself: a
+   tilting edge would slip out from under the mouse and flicker the hover. */
 .hp-day img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   display: block;
+  width: calc(100% * var(--wide));
+  max-width: none;
+  height: calc(100% * var(--tall));
+  object-fit: cover;
+  transform: translate(-50%, -50%) perspective(700px) rotateX(calc(var(--ty, 0) * -16deg))
+    rotateY(calc(var(--tx, 0) * 16deg));
+  clip-path: inset(calc((1 - 1 / var(--tall)) * 50%) calc((1 - 1 / var(--wide)) * 50%));
+  pointer-events: none;
+  /* (The tilt is eased frame by frame in HappeningsPage.jsx, not here.) */
+  transition: clip-path 0.3s ease;
+  will-change: transform;
+}
+
+/* What takes the pointer instead: a box that never tilts, the day's size
+   until hovered and then the whole poster's, so the hover holds steady right
+   out to the poster's edges. */
+.hp-day.has-event::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  transform: translate(-50%, -50%);
 }
 
 .hp-more {
@@ -1712,8 +1799,6 @@ body {
 
   .hp-calendar {
     width: 100%;
-    --gap: 5px;
-    --around: 208px;
   }
 
   .hp-grid {

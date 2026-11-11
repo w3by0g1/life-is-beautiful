@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { fetchEvents, imageUrl } from "./sanity.js";
+import { href } from "./route.js";
 import { Meta, RichText } from "./ArtistPage.jsx";
 
 // The happenings calendar, over the blurred sheet: a month of days (Monday
@@ -37,6 +38,62 @@ const MONTHS = [
 // A month, d months along: [year, month].
 const shift = (y, m, d) => [y + Math.floor((m + d) / 12), (m + d + 12) % 12];
 
+// A hovered poster tilts toward where the mouse is over it (see index.css).
+// The mouse sets where each poster is heading, and every frame its tilt eases
+// part of the way there (frame-rate independent), so it glides however
+// unevenly the mouse moves. Posters let go settle back flat, then drop out.
+
+// How quickly the tilt catches up (per second; higher is snappier), and how
+// much bigger a hovered poster is (the hover scale in index.css), for where
+// the mouse is across it.
+const TILT_EASE = 9;
+const HOVER_SCALE = 1.7;
+
+const tilts = new Map();
+let tiltFrame = 0;
+let tiltLast = 0;
+const stepTilts = (now) => {
+  const dt = Math.min(0.05, (now - (tiltLast || now)) / 1000);
+  tiltLast = now;
+  const k = 1 - Math.exp(-TILT_EASE * dt);
+  for (const [el, t] of tilts) {
+    t.x += (t.tx - t.x) * k;
+    t.y += (t.ty - t.y) * k;
+    const settled =
+      !t.tx && !t.ty && Math.abs(t.x) < 0.002 && Math.abs(t.y) < 0.002;
+    el.style.setProperty("--tx", settled ? 0 : t.x.toFixed(4));
+    el.style.setProperty("--ty", settled ? 0 : t.y.toFixed(4));
+    if (settled) tilts.delete(el);
+  }
+  tiltFrame = tilts.size ? requestAnimationFrame(stepTilts) : 0;
+  if (!tiltFrame) tiltLast = 0;
+};
+const aimTilt = (el, tx, ty) => {
+  const t = tilts.get(el) ?? { x: 0, y: 0 };
+  Object.assign(t, { tx, ty });
+  tilts.set(el, t);
+  if (!tiltFrame) tiltFrame = requestAnimationFrame(stepTilts);
+};
+
+// Where the mouse is across the whole poster, -1 to 1 each way: measured from
+// the day's middle (which stays put as it grows) and its laid-out size (which
+// doesn't change as it scales or the poster tilts), held at the edges.
+const tiltTo = (e, aspect = 0.75) => {
+  if (e.pointerType !== "mouse") return;
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  const halfW = (el.offsetWidth / 2) * HOVER_SCALE * Math.max(1, aspect / 0.75);
+  const halfH =
+    (el.offsetHeight / 2) * HOVER_SCALE * Math.max(1, 0.75 / aspect);
+  const clamp = (v) => Math.max(-1, Math.min(1, v));
+  aimTilt(
+    el,
+    clamp((e.clientX - r.left - r.width / 2) / halfW),
+    clamp((e.clientY - r.top - r.height / 2) / halfH),
+  );
+};
+const untilt = (e) => aimTilt(e.currentTarget, 0, 0);
+
 // Dates as "YYYY-MM-DD" (as Sanity stores them), in local time.
 const iso = (y, m, d) =>
   `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -67,7 +124,7 @@ function Lineup({ lineup, onArtist }) {
           return (
             <span key={p._key}>
               <a
-                href={`#artists/${encodeURIComponent(p.artist.slug)}`}
+                href={href(`artists/${encodeURIComponent(p.artist.slug)}`)}
                 onClick={(e) => {
                   e.preventDefault();
                   onArtist(p.artist.slug);
@@ -98,8 +155,9 @@ function Lineup({ lineup, onArtist }) {
   );
 }
 
-// The poster sizes the calendar's cells and the details load them at.
-const THUMB_W = 120;
+// The poster sizes the calendar's cells (shown up to about this big when
+// hovered) and the details load them at.
+const TILE_W = 360;
 const POSTER_W = 400;
 
 // Starts a poster downloading (once), so it's ready by the time it's opened:
@@ -126,7 +184,7 @@ function Poster({ poster, alt }) {
     >
       <img
         className="hp-poster-thumb"
-        src={imageUrl(poster.url, THUMB_W)}
+        src={imageUrl(poster.url, TILE_W)}
         alt=""
         aria-hidden="true"
       />
@@ -331,6 +389,12 @@ export default function HappeningsPage({
                   preload(imageUrl(e.poster?.url, POSTER_W)),
                 )
               }
+              onPointerMove={
+                ev?.poster?.url
+                  ? (e) => tiltTo(e, ev.poster.aspect ?? 0.75)
+                  : undefined
+              }
+              onPointerLeave={ev?.poster?.url ? untilt : undefined}
               onClick={() => {
                 if (!ev) return;
                 // Clicking a day steps through its events, then puts the
@@ -341,10 +405,16 @@ export default function HappeningsPage({
                 );
               }}
               aria-label={ev ? `${ev.title}, ${formatDate(date)}` : undefined}
+              // The poster's shape, for showing it whole on hover (index.css).
+              style={
+                ev?.poster?.url
+                  ? { "--ar": ev.poster.aspect ?? 0.75 }
+                  : undefined
+              }
             >
               {ev?.poster?.url ? (
                 <img
-                  src={imageUrl(ev.poster.url, THUMB_W)}
+                  src={imageUrl(ev.poster.url, TILE_W)}
                   alt=""
                   loading="lazy"
                 />

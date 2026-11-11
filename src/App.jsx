@@ -7,6 +7,13 @@ import {
   tallTextWidth,
 } from "./layout.js";
 import { ARTISTS } from "./artists.js";
+import {
+  currentPath,
+  followLink,
+  href,
+  navigate,
+  upgradeHashLink,
+} from "./route.js";
 import { fetchArtists, fetchInfo, fetchSettings } from "./sanity.js";
 import { setInkLifespan } from "./ink.js";
 import ArtistPage from "./ArtistPage.jsx";
@@ -33,24 +40,23 @@ const NAV = [
 // them.
 const SETTINGS_WAIT = 700;
 
-// Which view the address asks for: "#artists" pans the sheet over and shows
-// the artist list beside the logo, "#artists/<slug>" opens that artist's page over it,
-// "#gallery" shows the gallery, "#happenings" shows the calendar, "#info"
-// shows the info text over the middle of the sheet, "#contact" shows the
-// contact form; anything else is the plain sheet.
-// The header link the address belongs to ("#artists/aloisius" → "artists"),
-// whether or not there's a view behind it yet.
-const sectionFromHash = () =>
-  window.location.hash.replace(/^#/, "").split("/")[0];
+// An old "#artists" link becomes its path before anything reads the address.
+upgradeHashLink();
 
-const viewFromHash = () => {
-  const h = window.location.hash;
-  if (h.startsWith("#artists")) return "artists";
-  if (h === "#happenings") return "happenings";
-  if (h === "#gallery") return "gallery";
-  if (h === "#info") return "info";
-  if (h === "#contact") return "contact";
-  return "home";
+// Which view the address asks for (see route.js): "artists" pans the sheet
+// over and shows the artist list beside the logo, "artists/<slug>" opens that
+// artist's page over it, "gallery" shows the gallery, "happenings" the
+// calendar, "info" the info text over the middle of the sheet, "contact" the
+// contact form; anything else is the plain sheet.
+// The header link the address belongs to ("artists/aloisius" → "artists"),
+// whether or not there's a view behind it yet.
+const sectionFromPath = () => currentPath().split("/")[0];
+
+const VIEWS = ["happenings", "gallery", "info", "contact"];
+const viewFromPath = () => {
+  const path = currentPath();
+  if (path === "artists" || path.startsWith("artists/")) return "artists";
+  return VIEWS.includes(path) ? path : "home";
 };
 
 // Whether a view sets its writing over the sheet (the artist list, but not an
@@ -78,31 +84,24 @@ const INFO_FALLBACK = [
     ],
   },
 ];
-// Back to the plain sheet. Not by going to "#": the browser scrolls to the
-// top for that, and on a phone the page is kept scrolled down behind the
-// status bar (see fullBleed.js), so the sheet would jump for a frame before
-// being put back. The address loses its hash without a scroll instead.
-const goHome = () => {
-  if (!window.location.hash) return;
-  history.pushState(
-    null,
-    "",
-    window.location.pathname + window.location.search,
-  );
-  window.dispatchEvent(new HashChangeEvent("hashchange"));
-};
+// Back to the plain sheet.
+const goHome = () => navigate("");
 
-const artistFromHash = () => {
-  const m = window.location.hash.match(/^#artists\/(.+)$/);
+// The artist whose page the address asks for, if any.
+const artistFromPath = () => {
+  const m = currentPath().match(/^artists\/(.+)$/);
   return m ? decodeURIComponent(m[1]) : null;
 };
+
+// An artist's page, as a path.
+const artistPath = (slug) => `artists/${encodeURIComponent(slug)}`;
 
 function App() {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
-  const [view, setView] = useState(viewFromHash);
-  const [section, setSection] = useState(sectionFromHash);
-  const [artistSlug, setArtistSlug] = useState(artistFromHash);
+  const [view, setView] = useState(viewFromPath);
+  const [section, setSection] = useState(sectionFromPath);
+  const [artistSlug, setArtistSlug] = useState(artistFromPath);
   // The artists, from Sanity once loaded (the built-in list until then).
   const [artists, setArtists] = useState(() =>
     ARTISTS.map((name) => ({ name, slug: name })),
@@ -166,8 +165,8 @@ function App() {
         sceneRef.current = d;
         d.setRest(restRef.current);
         d.setPan(...panRef.current);
-        d.setDrawing(viewFromHash() === "home", {
-          inkShown: inkShownIn(viewFromHash(), artistFromHash()),
+        d.setDrawing(viewFromPath() === "home", {
+          inkShown: inkShownIn(viewFromPath(), artistFromPath()),
         });
       });
     return () => {
@@ -209,23 +208,24 @@ function App() {
     };
   }, []);
 
-  // Follow the address (the header links), and Esc closes the list.
+  // Follow the address (links, and the back and forward buttons), and Esc
+  // closes the list.
   useEffect(() => {
-    const onHash = () => {
-      setView(viewFromHash());
-      setSection(sectionFromHash());
-      setArtistSlug(artistFromHash());
+    const onAddress = () => {
+      setView(viewFromPath());
+      setSection(sectionFromPath());
+      setArtistSlug(artistFromPath());
     };
     // Esc steps back: from an artist to the list, from the list to the sheet.
     const onKey = (e) => {
       if (e.key !== "Escape") return;
-      if (artistFromHash()) window.location.hash = "artists";
-      else if (viewFromHash() !== "home") goHome();
+      if (artistFromPath()) navigate("artists");
+      else if (viewFromPath() !== "home") goHome();
     };
-    window.addEventListener("hashchange", onHash);
+    window.addEventListener("popstate", onAddress);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("popstate", onAddress);
       window.removeEventListener("keydown", onKey);
     };
   }, []);
@@ -319,15 +319,11 @@ function App() {
       >
         <a
           className="site-name"
-          href="#"
+          href={href("")}
           aria-label="life is beautiful, home"
-          // Home without following the bare "#", which would scroll the page
-          // to its very top: on a phone it's held scrolled down a little (see
-          // fullBleed.js), so the sheet would jump for a frame.
           onClick={(e) => {
-            e.preventDefault();
             setMenuOpen(false);
-            goHome();
+            followLink(e, "");
           }}
         >
           <img
@@ -352,7 +348,7 @@ function App() {
           {NAV.map(([item, label, url], i) => (
             <a
               key={item}
-              href={url ?? `#${item}`}
+              href={url ?? href(item)}
               {...(url && { target: "_blank", rel: "noreferrer" })}
               // The label again, for the width its bold self takes (index.css).
               data-label={label}
@@ -369,7 +365,9 @@ function App() {
                   if (item === "happenings" && eventShown)
                     calendarBack.current?.();
                   else goHome();
+                  return;
                 }
+                followLink(e, item);
               }}
             >
               {label}
@@ -386,7 +384,8 @@ function App() {
         {artists.map(({ name, slug }, i) => (
           <li key={slug ?? name} style={{ "--i": i }}>
             <a
-              href={`#artists/${encodeURIComponent(slug ?? name)}`}
+              href={href(artistPath(slug ?? name))}
+              onClick={(e) => followLink(e, artistPath(slug ?? name))}
               tabIndex={view === "artists" ? 0 : -1}
             >
               {name}
@@ -406,16 +405,11 @@ function App() {
           instagram={info.instagram}
         />
       </div>
-      <ArtistPage
-        slug={artistSlug}
-        onClose={() => (window.location.hash = "artists")}
-      />
+      <ArtistPage slug={artistSlug} onClose={() => navigate("artists")} />
       <HappeningsPage
         open={view === "happenings"}
         onClose={goHome}
-        onArtist={(slug) =>
-          (window.location.hash = `artists/${encodeURIComponent(slug)}`)
-        }
+        onArtist={(slug) => navigate(artistPath(slug))}
         onEventShown={setEventShown}
         backRef={calendarBack}
       />

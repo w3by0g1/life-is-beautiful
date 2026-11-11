@@ -103,15 +103,42 @@ function sketchClearer() {
   }
 }
 
+// The site's addresses are paths ("/artists", "/artists/aloisius"; see
+// src/route.js), but GitHub Pages only serves files that exist. So the built
+// page is also written at each fixed path, and as 404.html, which GitHub Pages
+// serves for any other (an artist's page), where the app reads the address
+// and shows it.
+const PAGES = ['artists', 'gallery', 'happenings', 'info', 'contact']
+function pagesForPaths() {
+  let outDir = 'dist'
+  return {
+    name: 'pages-for-paths',
+    apply: 'build',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir)
+    },
+    closeBundle() {
+      const page = fs.readFileSync(path.join(outDir, 'index.html'))
+      fs.writeFileSync(path.join(outDir, '404.html'), page)
+      for (const name of PAGES) {
+        fs.mkdirSync(path.join(outDir, name), { recursive: true })
+        fs.writeFileSync(path.join(outDir, name, 'index.html'), page)
+      }
+    },
+  }
+}
+
 // https://vite.dev/config/
 // `npm run dev:phone` serves over https on the local network (with a
 // self-signed certificate), which phones need before they'll share their tilt.
-export default defineConfig(({ mode }) => ({
-  // Relative asset paths, so the built site works from any folder (e.g.
-  // GitHub Pages serves it under /<repo>/).
-  base: './',
+export default defineConfig(({ command, mode }) => ({
+  // Absolute asset paths, so they load from any address (relative ones would
+  // be looked for under /artists/ on an artist's page). GitHub Pages serves the
+  // site under /<repo>/; on its own domain this would be '/'.
+  base: command === 'build' ? '/life-is-beautiful/' : '/',
   plugins: [
     react(),
+    pagesForPaths(),
     babel({ presets: [reactCompilerPreset()] }),
     introPathSaver(),
     sketchClearer(),

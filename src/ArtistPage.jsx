@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fetchArtist, imageUrl } from "./sanity.js";
+import { href } from "./route.js";
 
 // An artist's page, over the blurred, lightened sheet: their artwork, name and
 // description on the left, and their albums, singles and media (from Sanity,
@@ -323,7 +324,7 @@ export default function ArtistPage({ slug, onClose }) {
               )}
               <a
                 className="ap-back"
-                href="#artists"
+                href={href("artists")}
                 onClick={(e) => {
                   e.preventDefault();
                   onClose();
