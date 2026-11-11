@@ -39,10 +39,14 @@
   /* The paper's colour as it shows on screen, for the halo around the
      header, the artist list and the info text: it covers ink under them like
      a mask, rather than glowing white. */
-  --paper: rgb(242, 237, 227);
+  --paper: rgb(242, 236, 224);
   /* The same, part see-through: the fainter halo of the artist list and the
      info text. */
-  --paper-soft: rgba(242, 237, 227, 0.55);
+  --paper-soft: rgba(242, 236, 224, 0.55);
+  /* The washes laid over the blurred sheet (an artist's page and the other
+     pages, the gallery's large image, the phone menu): a warm, sepia cream,
+     as RGB channels for each to set its own strength. */
+  --wash-rgb: 246, 240, 229;
 }
 
 html,
@@ -55,7 +59,7 @@ body {
    it. paperScene.js keeps it in step with PAPER_FROM / PAPER_TO and the
    window's shape; these are the starting values. */
 html {
-  background: rgb(233, 227, 214) linear-gradient(to bottom right, rgb(250, 247, 238), rgb(233, 227, 214));
+  background: rgb(233, 226, 211) linear-gradient(to bottom right, rgb(250, 246, 235), rgb(233, 226, 211));
   /* The page is exactly one screen tall (the scene), so there's nothing to
      scroll; no bounce past the ends either. It isn't set to overflow: hidden,
      so phone browsers treat it as an ordinary page that runs under their bars. */
@@ -83,42 +87,11 @@ body {
   width: 100%;
   height: calc(100vh + var(--overhang, 0px) + var(--underhang, 0px));
   height: calc(100lvh + var(--overhang, 0px) + var(--underhang, 0px));
-  transition: opacity 0.6s ease;
-}
-
-/* Under the artist list and the info text the sheet, drawings and all, fades
-   back a little. */
-.scene.dim {
-  opacity: 0.6;
-}
-
-/* The site's name in the middle of the page while the paper is being made
-   (its textures are built in a worker and its shader compiled, which takes a
-   moment); it fades out as the sheet fades in, and isn't there to be clicked
-   or drawn through. */
-.opening {
-  position: fixed;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
-  font-size: clamp(34px, 7vw, 64px);
-  font-weight: 350;
-  letter-spacing: -0.08em;
-  color: var(--text);
-  mix-blend-mode: multiply;
-  pointer-events: none;
-  transition: opacity 0.6s ease;
-}
-
-.opening.gone {
-  opacity: 0;
 }
 
 /* The header, the artist list and the info text only appear once the sheet
-   has (see the opening title above): they fade in as it finishes fading out. */
+   has (while the paper is being made the page is just its gradient): they
+   fade in a moment after it. */
 .site-header,
 .artists,
 .info-text {
@@ -150,13 +123,23 @@ body {
   padding: 10px clamp(16px, 2.2vw, 32px);
   padding-left: calc(clamp(16px, 2.2vw, 32px) + env(safe-area-inset-left, 0px));
   /* A finger dragged on it doesn't scroll the page (the sheet under it
-     doesn't either); taps still go through to the links. */
+     doesn't either); taps still go through to the links. Nor does a drag
+     across it select its text, or pick up its links or logo. */
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   font-weight: 350;
   letter-spacing: -0.04em;
   color: var(--text);
+}
+
+.site-header a,
+.site-header img {
+  -webkit-user-drag: none;
 }
 
 .site-header a {
@@ -317,7 +300,7 @@ body {
     height: calc(100lvh + var(--overhang, 0px) + var(--underhang, 0px));
     z-index: 3;
     touch-action: none;
-    background: rgba(238, 238, 235, 0.55);
+    background: rgba(var(--wash-rgb), 0.55);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
     opacity: 0;
@@ -365,7 +348,7 @@ body {
 }
 
 /* The artist list (#artists) beside the logo, the sheet panned over to make
-   room: right-aligned, level with the logo's middle; placed by App.jsx. Set
+   room: left-aligned, level with the logo's middle; placed by App.jsx. Set
    in Inter, in a paper-coloured halo that softens the ink around them. The
    names blur into focus as they fade in, once the pan has mostly settled,
    each a moment after the one above; they fade out together. Hovering a name
@@ -378,7 +361,7 @@ body {
   padding: 0;
   list-style: none;
   transform: translateY(-50%);
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   font-size: 20px;
@@ -404,28 +387,15 @@ body {
   }
 }
 
-/* On a narrow screen the names sit centred above the logo (the sheet pans up
-   to make room; see layout.js), so the list hangs from its bottom edge. */
-.artists.tall {
-  transform: translateY(-100%);
-  text-align: center;
-  white-space: normal;
-}
-
-/* Each name right-aligned under the one above, or centred there. */
+/* Each name under the one above. */
 .artists li {
   width: fit-content;
-  margin-left: auto;
   opacity: 0;
   filter: blur(6px);
   transition:
     opacity 0.35s ease,
     filter 0.35s ease,
     font-weight 0.3s ease;
-}
-
-.artists.tall li {
-  margin-right: auto;
 }
 
 .artists.open li {
@@ -535,12 +505,17 @@ body {
     filter 0.9s ease calc(0.4s + var(--i, 0) * 0.06s);
 }
 
+/* The marks in the text's colour, lightening a little when pointed at.
+   (Without the text's halo: the Bandcamp mark's "bc" is SVG text, and the
+   halo round its "c" would show over its "b".) */
 .info-links a {
-  color: #444;
+  color: var(--text);
+  text-shadow: none;
+  transition: opacity 0.2s ease;
 }
 
 .info-links a:hover {
-  color: var(--text);
+  opacity: 0.7;
 }
 
 .info-text strong {
@@ -578,7 +553,7 @@ body {
   overflow: hidden;
   /* How much the sheet behind is lightened (the wash's opacity and a touch of
      brightness) and blurred. */
-  background: rgba(248, 250, 251, 0.38);
+  background: rgba(var(--wash-rgb), 0.42);
   -webkit-backdrop-filter: blur(16px) brightness(1.0);
   backdrop-filter: blur(16px) brightness(1.0);
   opacity: 0;
@@ -596,6 +571,27 @@ body {
   opacity: 1;
   visibility: visible;
   transition: opacity 0.45s ease;
+}
+
+/* On the calendar, a fade behind the header, from the page's colour to
+   nothing, so the months scroll away under the links rather than through
+   them. (On the page, not the header: a fixed box with a background at the
+   top of a phone's screen gets Safari to tint its status bar.) */
+.happenings-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: calc(140px + env(safe-area-inset-top, 0px) + var(--overhang, 0px));
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--wash-rgb), 0.5) 0%,
+    rgba(var(--wash-rgb), 0.4) 45%,
+    rgba(var(--wash-rgb), 0) 100%
+  );
+  pointer-events: none;
 }
 
 /* The page's content scrolls inside the blurred background, fading to
@@ -738,12 +734,12 @@ body {
 
 .ap-links a {
   display: block;
-  color: #777;
-  transition: color 0.2s ease;
+  color: var(--text);
+  transition: opacity 0.2s ease;
 }
 
 .ap-links a:hover {
-  color: var(--text);
+  opacity: 0.7;
 }
 
 .ap-links svg {
@@ -1027,16 +1023,16 @@ body {
 }
 
 /* As wide as its grid, so the pair centres as one. The days are sized so
-   that five weeks a little overfill the height left on screen (105%), the
-   last week running just past the bottom; the months scroll. */
+   that five weeks overfill the height left on screen (125%), the last week
+   or so running past the bottom; the months scroll. */
 .hp-calendar {
   /* The days of the week and the dates on the cells are set in Inter like
      the rest of the site. */
   font-family: 'Rigid Square Arrows', 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   letter-spacing: normal;
   flex: 0 0 auto;
-  width: min(100%, calc(((100vh - var(--around)) * 1.05 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
-  width: min(100%, calc(((100svh - var(--around)) * 1.05 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
+  width: min(100%, calc(((100vh - var(--around)) * 1.25 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
+  width: min(100%, calc(((100svh - var(--around)) * 1.25 - 4 * var(--gap)) / 5 * 3 / 4 * 7 + 6 * var(--gap)));
   --gap: 12px;
   --around: 204px;
 }
@@ -1075,7 +1071,11 @@ body {
   font-size: 13px;
   letter-spacing: -0.02em;
   color: #7777778d;
-  
+}
+
+/* The day's name in full; its first three letters on a phone (below). */
+.hp-short {
+  display: none;
 }
 
 /* The month shown, with the months either side (each with its own title)
@@ -1138,9 +1138,9 @@ body {
    shadow, and over its neighbours. */
 .hp-day.has-event.chosen {
   z-index: 1;
-  transform: scale(1.08);
+  transform: scale(1.14);
   box-shadow:
-    0 10px 26px rgba(0, 0, 0, 0.22),
+    0 10px 26px rgba(var(--text-rgb), 0.22),
     0 0 0 1px var(--text);
 }
 
@@ -1148,8 +1148,8 @@ body {
 @media (hover: hover) and (pointer: fine) {
   .hp-day.has-event:hover {
     z-index: 1;
-    transform: scale(1.08);
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+    transform: scale(1.14);
+    box-shadow: 0 10px 26px rgba(var(--text-rgb), 0.22);
   }
 }
 
@@ -1540,7 +1540,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: calc(96px + var(--overhang, 0px)) 80px calc(64px + var(--underhang, 0px));
-  background: rgba(244, 246, 247, 0.9);
+  background: rgba(var(--wash-rgb), 0.9);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   opacity: 0;
@@ -1630,7 +1630,7 @@ body {
     padding: calc(88px + var(--overhang, 0px)) 12px calc(140px + var(--underhang, 0px));
     /* Nearly solid, so the gallery's images behind don't show through as a
        faint box around the one shown. */
-    background: rgba(244, 246, 247, 0.97);
+    background: rgba(var(--wash-rgb), 0.97);
   }
 
   .gl-large-photo {
@@ -1723,6 +1723,14 @@ body {
   .hp-dayname {
     margin-bottom: -2px;
     font-size: 12px;
+  }
+
+  .hp-long {
+    display: none;
+  }
+
+  .hp-short {
+    display: inline;
   }
 
   .hp-daynum {

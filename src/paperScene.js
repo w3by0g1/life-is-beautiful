@@ -40,6 +40,16 @@ const FIBRE_STRENGTH = 0.35
 // Load animation: seconds before the logo starts rising, and how long it takes.
 const EMBOSS_DELAY = 1
 const EMBOSS_DURATION = 3
+// Arriving to an empty sheet: the recording written out (by its name in
+// intro-path.json), seconds after the logo has risen before it starts, and how
+// long its strokes last.
+const WELCOME = 'life is beautiful'
+const WELCOME_DELAY = 0.3
+const WELCOME_LIFE = 30
+// On a tall screen: the most of the screen's width it takes, and the gap
+// between the logo's foot and its top (as a share of the screen's width).
+const WELCOME_WIDTH = 0.86
+const WELCOME_GAP = 0.06
 
 // The light is the sun, like a sundial's: at a given local time, where it comes
 // from across the sheet (radians: 0 from the right, the east, at 6am; -π/2 from
@@ -150,8 +160,8 @@ const FIBRE_COLOR = [171, 188, 195]
 // Paper colour: a diagonal linear gradient from the top-left corner to the
 // bottom-right, with faint fibre mottling and a vellum-style speckle.
 // Any CSS colour works: 'rgb(247, 251, 252)', '#f7fbfc', 'ivory', …
-const PAPER_FROM = 'rgb(250, 247, 238)'
-const PAPER_TO = 'rgb(233, 227, 214)'
+const PAPER_FROM = 'rgb(250, 246, 235)'
+const PAPER_TO = 'rgb(233, 226, 211)'
 
 // Haze over the whole scene, like light through tracing paper: blur (CSS px),
 // how much of the blurred scene is mixed in (0 = off), and a white wash over it.
@@ -730,6 +740,10 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   // Freshly built textures (on load, and after a resize) are uploaded to the
   // GPU one per frame, then swapped in together, so no single frame stalls.
   let introStart = null
+  // Whether live drawing found the sheet empty on arriving (null until it
+  // knows), and whether the welcome has been written yet.
+  let sheetEmpty = null
+  let welcomed = false
   let pending = null
   // What the latest texture request, the paper textures in use, and the ink
   // canvas were laid out for: the window size (CSS px) and how much extra
@@ -963,6 +977,8 @@ export async function createPaperScene(container, logoUrl, options = {}) {
   // A pen touching down, moving and lifting: its ink, and its press if it has
   // one (the shader holds one press for the user and one for the intro, so of
   // several fingers only the one drawing with the 'user' pen presses).
+  // Whether the visitor has drawn yet (see the welcome below).
+  let userDrew = false
   const penDown = (id, e) => {
     const p = presses[id]
     if (p) {
@@ -971,7 +987,9 @@ export async function createPaperScene(container, logoUrl, options = {}) {
       p.center.copy(p.target)
       p.lastDrop.copy(p.target)
     }
-    if (PAINT) ink.begin(...toInk(e), e.timeStamp, id)
+    if (id === 'user') userDrew = true
+    // (A replayed recording can give its strokes a shorter life; see intro.js.)
+    if (PAINT) ink.begin(...toInk(e), e.timeStamp, id, { life: e.life })
   }
   const penMove = (id, e) => {
     const p = presses[id]
@@ -1079,6 +1097,9 @@ export async function createPaperScene(container, logoUrl, options = {}) {
       end: (id) => PAINT && ink.end(id),
     },
     onClear: () => ink.clear(),
+    onLoaded: (any) => {
+      sheetEmpty = !any
+    },
   })
   // Pointer listeners: recorded for the intro (while recording) and sent live.
   // While drawing is off (see setDrawing) a press doesn't start a stroke (and
@@ -1257,7 +1278,18 @@ export async function createPaperScene(container, logoUrl, options = {}) {
       inkToggle = inkTarget > inkToggle ? Math.min(inkTarget, inkToggle + step) : Math.max(inkTarget, inkToggle - step)
     }
     ink.uniforms.inkOpacity.value = inkToggle * embossUniforms.emboss.value
-    // A recording played from the dev panel's list carries on.
+    // Arriving to a sheet nobody has drawn on, once the logo has risen, the
+    // recording of "life is beautiful" is written out in the middle of it,
+    // lasting WELCOME_LIFE seconds; not if the visitor has started drawing.
+    // On a screen taller than it's wide, where it wouldn't fit across the
+    // logo, it's set smaller and below the logo instead.
+    if (sheetEmpty && !welcomed && !userDrew && since >= EMBOSS_DELAY + EMBOSS_DURATION + WELCOME_DELAY) {
+      welcomed = true
+      const [vw, vh] = viewSize()
+      const below = vh > vw ? { top: (LOGO_FRACTION / 2) * 0.97 + WELCOME_GAP, maxWidth: WELCOME_WIDTH } : {}
+      intro.play(WELCOME, { life: WELCOME_LIFE, ...below })
+    }
+    // A replay (that, or one played from the dev panel's list) carries on.
     intro.update()
     live.update()
     ink.setTime(inkNow())

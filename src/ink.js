@@ -21,10 +21,19 @@ import * as THREE from 'three'
 // in the dev menu, and every stroke (including other people's, live) is drawn
 // with the pen it was made with.
 export const PENS = ['calligraphy', 'pencil', 'biro blue', 'biro red']
+
+// A press that moves less than this (CSS px) before it lifts is a tap, and
+// leaves a round dot. (The nib isn't put down until the pen has moved that
+// far: put down where it touched, a broad nib that never moves is just its
+// slanted edge, a thin bar across the dot.)
+const TAP_SLOP = 3
 export const DEFAULT_PEN = 'calligraphy'
 
 // nib: its length (CSS px); angle: how it's held (degrees; negative tilts it
-// up to the right); widthSlow/widthFast: the line's width as a fraction of the
+// up to the right); round: how much of a round tip the nib also has (0 = a
+// flat edge only, thick one way and hairline the other; 1 = as round as it is
+// broad, like a ballpoint), the line never thinner than that share of its
+// full width; widthSlow/widthFast: the line's width as a fraction of the
 // nib when moving slowly and when fast, reaching its thinnest at fastAt (CSS
 // px/s). core/dot/edge: the ink's colour, the grain printed over it, and its
 // edge (also the streaks along a stroke). grain: the size of that grain (CSS
@@ -43,6 +52,7 @@ const PEN_STYLES = {
   calligraphy: {
     nib: 15,
     angle: -50,
+    round: 0.5,
     widthSlow: 1.35,
     widthFast: 0.07,
     fastAt: 900,
@@ -608,9 +618,14 @@ export function createInk() {
     ctx.lineCap = 'butt'
     quad(0.72)
     ctx.fill()
-    ctx.lineWidth = 1.1 * px
+    // The round part of the tip (pen.round), or just a hairline, so strokes
+    // along the nib direction don't vanish.
+    const roundWidth = 2 * half * 0.72 * (pen.round ?? 0)
+    ctx.lineCap = 'round'
+    ctx.lineWidth = Math.max(1.1 * px, roundWidth)
     hair()
     ctx.stroke()
+    ctx.lineCap = 'butt'
     ctx.globalAlpha = 1
 
     // Slow strokes pool: a little deeper colour builds up with each overlapping step.
@@ -645,9 +660,11 @@ export function createInk() {
     quad(1)
     ctx.fill()
     ctx.stroke()
-    ctx.lineWidth = 2.6 * px * pen.edgeWidth
+    ctx.lineCap = 'round'
+    ctx.lineWidth = 2.6 * px * pen.edgeWidth + roundWidth
     hair()
     ctx.stroke()
+    ctx.lineCap = 'butt'
     ctx.globalAlpha = 1
     ctx.globalCompositeOperation = 'source-over'
 
@@ -1010,6 +1027,13 @@ export function createInk() {
   // The selected pen lifts off.
   const penEnd = () => {
     if (!stroke.active) return
+    // A tap: a round dot, about as wide as a slow line.
+    if (stroke.tap) {
+      const { sx, sy } = stroke
+      const r = nib() * stroke.width * 0.3
+      blot(sx, sy, r, 0.25)
+      recordTrail([{ x: sx, y: sy }, { x: sx + 0.01, y: sy + 0.01 }], r, 0, 0)
+    }
     drawTail()
     // Lifting the pen leaves a blot, and a quick flick can throw droplets.
     if (Math.random() < 0.6) blot(stroke.sx, stroke.sy, nib() * pen.blotLift * (0.7 + Math.random() * 0.6), 0.25)
@@ -1238,8 +1262,10 @@ export function createInk() {
 
     // Methods that draw take a pen id (default 'user'), so pens don't interfere.
     // begin's options: age, in seconds, for a stroke that was drawn earlier
-    // (so it fades when it would have).
-    begin(x, y, t, id = 'user', { age = 0 } = {}) {
+    // (so it fades when it would have); life, in seconds, for one that fades
+    // sooner than the ink's lifespan (it's dated that much earlier, without
+    // the bleed catching up as an old stroke's does).
+    begin(x, y, t, id = 'user', { age = 0, life } = {}) {
       select(id)
       const streaks = Array.from({ length: 2 + Math.floor(Math.random() * 2) }, () => [
         Math.random() * 1.6 - 0.8,
@@ -1263,12 +1289,12 @@ export function createInk() {
         rest: 0,
         pts: [{ x, y, w: pen.widthSlow * 0.9 }],
         tailDrawn: true,
+        tap: true,
       })
-      current = penState.current = { x0: x, y0: y, x1: x, y1: y, groups: [], tiles: new Set(), layer: ctx, born: Math.max(0, ageStepAt(now - Math.min(age, HEADROOM))), pen: penName, aged: age }
-      // The nib touching down leaves a small blot.
+      current = penState.current = { x0: x, y0: y, x1: x, y1: y, groups: [], tiles: new Set(), layer: ctx, born: Math.max(0, ageStepAt(now - Math.min(life == null ? age : Math.max(age, INK_LIFESPAN - life), HEADROOM))), pen: penName, aged: age }
+      // The nib touching down leaves a small blot. (The nib itself goes down
+      // once the pen moves; see TAP_SLOP.)
       blot(x, y, nib() * pen.blotTouch * (0.8 + Math.random() * 0.4), 0.2)
-      const half = stamp(x, y, x + 0.01, y + 0.01, stroke.width)
-      recordTrail([{ x, y }, { x: x + 0.01, y: y + 0.01 }], half, 0, 0)
     },
 
     // Pointer moved to (x, y) at time t (ms). The stroke is a smooth curve
@@ -1289,6 +1315,15 @@ export function createInk() {
       stroke.x = x
       stroke.y = y
       stroke.t = t
+      // Still a tap: nothing more until the pen has moved off it, when the nib
+      // goes down where it touched.
+      if (stroke.tap) {
+        if (Math.hypot(x - stroke.sx, y - stroke.sy) < TAP_SLOP * px) return
+        stroke.tap = false
+        const { sx, sy } = stroke
+        const half = stamp(sx, sy, sx + 0.01, sy + 0.01, stroke.width)
+        recordTrail([{ x: sx, y: sy }, { x: sx + 0.01, y: sy + 0.01 }], half, 0, 0)
+      }
       stroke.speed += (speed - stroke.speed) * 0.3
       stroke.peak = Math.max(stroke.peak * Math.exp(-(t - stroke.peakT) / 150), stroke.speed)
       stroke.peakT = t

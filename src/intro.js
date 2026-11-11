@@ -1,10 +1,12 @@
 import introBank from './assets/intro-path.json'
 
-// Records drawing sessions into a bank. They aren't replayed on the sheet by
-// themselves any more (the header shows one; see Signature.jsx), but one can
-// still be played from the dev panel's list, as a second "ghost" pen: it
-// draws ink and presses the logo but doesn't move the light, and it runs
-// alongside the user, who can draw at the same time.
+// Records drawing sessions into a bank. They aren't replayed on the sheet at
+// random any more (the header shows one; see Signature.jsx). One is played
+// when a visitor arrives to an empty sheet (the welcome; see paperScene.js,
+// and play() below), and any can be played from the dev panel's list. A
+// replay is a second "ghost" pen: it draws ink and presses the logo but
+// doesn't move the light, and it runs alongside the user, who can draw at the
+// same time.
 //
 // While developing, a Record / Stop button sits in the bottom-right corner. After
 // Record, the next press starts the recording, which logs every pointer
@@ -44,6 +46,9 @@ export function createIntro({ element, container, down, move, up, offset = () =>
   const bank = recordingsIn(introBank)
   // When each was recorded (for the list), where known.
   const recordedAt = introBank?.recordings?.map((r) => r.recordedAt) ?? []
+  // Their names, where they have one (set by hand in intro-path.json), for
+  // play().
+  const names = introBank?.recordings?.map((r) => r.name) ?? []
   // The recording in progress, if any; the replay in progress, if any; the
   // last recording played.
   let rec = null
@@ -305,11 +310,29 @@ export function createIntro({ element, container, down, move, up, offset = () =>
       .catch((err) => console.warn('Could not save the recording:', err))
   }
 
-  // Starts recording i now, in place of any replay in progress.
-  const playNow = (i) => {
+  // Starts recording i now, in place of any replay in progress. centre: moved
+  // so the middle of what it draws is the middle of the sheet, or (with top)
+  // centred across it with its top edge that far below the middle; maxWidth:
+  // shrunk to fit that width; life: how long (seconds) its strokes last, if
+  // not the ink's usual lifespan. (Lengths in the recordings' units, the
+  // screen's shorter side.)
+  const playNow = (i, { centre = false, top, maxWidth, life } = {}) => {
     if (replay?.held) up()
     lastPlayed = i
-    replay = { events: bank[i], i: 0, start: performance.now(), held: false }
+    const events = bank[i]
+    let shift = [0, 0]
+    let scale = 1
+    let at = [0, 0]
+    if (centre) {
+      const drawn = events.filter(([type]) => type !== UP)
+      const xs = drawn.map((e) => e[2])
+      const ys = drawn.map((e) => e[3])
+      const [w, h] = [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)]
+      shift = [-(Math.min(...xs) + Math.max(...xs)) / 2, -(Math.min(...ys) + Math.max(...ys)) / 2]
+      if (maxWidth) scale = Math.min(1, maxWidth / w)
+      if (top != null) at = [0, top + (h * scale) / 2]
+    }
+    replay = { events, i: 0, start: performance.now(), held: false, shift, scale, at, life }
   }
 
   return {
@@ -331,8 +354,17 @@ export function createIntro({ element, container, down, move, up, offset = () =>
       }
     },
 
-    // Per frame: carries on a replay started from the list, if one is
-    // playing.
+    // Plays the recording called `name` (see names) now, centred on the
+    // sheet (top, maxWidth and life as for playNow). False if there's no such
+    // recording.
+    play(name, { top, maxWidth, life } = {}) {
+      const i = names.indexOf(name)
+      if (i < 0 || !bank[i]?.length) return false
+      playNow(i, { centre: true, top, maxWidth, life })
+      return true
+    },
+
+    // Per frame: carries on a replay, if one is playing.
     update() {
       if (!replay) return
       const now = performance.now()
@@ -340,8 +372,11 @@ export function createIntro({ element, container, down, move, up, offset = () =>
       const events = replay.events
       while (replay.i < events.length && events[replay.i][1] <= t) {
         const [type, et, x, y] = events[replay.i++]
-        const [clientX, clientY] = fromPath(x, y)
-        const e = { clientX, clientY, timeStamp: replay.start + et }
+        const [clientX, clientY] = fromPath(
+          (x + replay.shift[0]) * replay.scale + replay.at[0],
+          (y + replay.shift[1]) * replay.scale + replay.at[1],
+        )
+        const e = { clientX, clientY, timeStamp: replay.start + et, life: replay.life }
         if (type === DOWN) {
           replay.held = true
           down(e)

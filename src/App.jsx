@@ -2,10 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPaperScene } from "./paperScene.js";
 import {
   artistsLayout,
-  artistsLayoutTall,
   infoTextWidth,
   isTall,
-  tallTextLeft,
   tallTextWidth,
 } from "./layout.js";
 import { ARTISTS } from "./artists.js";
@@ -20,12 +18,14 @@ import Signature from "./Signature.jsx";
 import headerLogoUrl from "./assets/header-logo.png";
 import logoUrl from "./assets/logo.jpg";
 
-// The header links: the view each opens, and how it reads. (Home is the
-// site's name at the left of the header.)
+// The header links: the view each opens, how it reads, and, for one that
+// leaves the site, where it goes (in a new tab). (Home is the site's name at
+// the left of the header.)
 const NAV = [
   ["artists", "artists"],
   ["gallery", "gallery"],
   ["happenings", "happenings"],
+  ["merch", "merch", "https://lifeisbeautifulrecords.bandcamp.com/merch"],
   ["info", "info"],
   ["contact", "contact"],
 ];
@@ -55,7 +55,7 @@ const viewFromHash = () => {
 };
 
 // Whether a view sets its writing over the sheet (the artist list, but not an
-// artist's page, and the info text), which fades back a little under it.
+// artist's page, and the info text).
 const overSheet = (view, slug) =>
   (view === "artists" && !slug) || view === "info";
 
@@ -66,7 +66,7 @@ const inkShownIn = (view, slug) =>
 
 // The site's logo, at the left of the header when it isn't showing a drawing.
 const HeaderLogo = () => (
-  <img className="header-logo" src={headerLogoUrl} alt="" />
+  <img className="header-logo" src={headerLogoUrl} alt="" draggable={false} />
 );
 
 // Shown until the info text loads from Sanity (or if it can't).
@@ -116,23 +116,12 @@ function App() {
   // How wide the info text is set (see layout.js).
   const [infoWidth, setInfoWidth] = useState(400);
   // Where the artist list sits (fixed-position CSS) and how far the sheet pans
-  // so the logo makes room for it: right on a wide screen, with the list
-  // beside the logo, and up on a narrow one (`tall`), with the list above it
-  // (see layout.js).
-  const [listLayout, setListLayout] = useState({
-    tall: false,
-    pan: 0,
-    right: 0,
-    top: 0,
-    panY: 0,
-    bottom: 0,
-    left: 0,
-    width: 0,
-  });
+  // right so the logo makes room for it, the list beside it (see layout.js).
+  const [listLayout, setListLayout] = useState({ pan: 0, right: 0, top: 0 });
   // The info text, with the marks that go under it (all from Sanity).
   const [info, setInfo] = useState({ text: INFO_FALLBACK });
   // Whether the sheet has appeared; until it has, the page is the paper's
-  // gradient with the title on it.
+  // gradient.
   const [ready, setReady] = useState(false);
   // Whether the happenings view is showing an event in place of the calendar
   // (it does that where there's only room for one; see HappeningsPage), and
@@ -148,12 +137,10 @@ function App() {
   // Where the sheet rests (see the layout below), kept for the scene when it
   // is made.
   const restRef = useRef(0);
-  // Only the artists view pans the sheet: across on a wide screen, up on a
-  // narrow one.
+  // Only the artists view pans the sheet, across to the right.
   const listRef = useRef(null);
-  const panX = view === "artists" && !listLayout.tall ? listLayout.pan : 0;
-  const panY = view === "artists" && listLayout.tall ? listLayout.panY : 0;
-  const panRef = useRef([panX, panY]);
+  const panX = view === "artists" ? listLayout.pan : 0;
+  const panRef = useRef([panX, 0]);
   // How far the artists view pans (set by the layout below before the scene
   // is made), so the sheet is built with that much paper around it.
   const panExtentRef = useRef({ left: 0, right: 0, top: 0, bottom: 0 });
@@ -276,34 +263,13 @@ function App() {
         r.height,
         list.offsetWidth,
       );
-      // What of the sheet is on screen, in the scene's own coordinates: it
-      // starts above the top of the screen on phones (see fullBleed.js), the
-      // header covers its first stretch, and a phone browser's bar floats over
-      // the last.
-      const shown = {
-        top: 96 - r.top,
-        bottom: window.innerHeight - 56 - r.top,
-      };
-      const { middle, listBottom } = artistsLayoutTall(
-        r.width,
-        r.height,
-        list.offsetHeight,
-        shown,
-      );
-      const panY = middle - (r.height / 2 + restY);
-      panExtentRef.current = tall
-        ? { left: 0, right: 0, top: panY, bottom: 0 }
-        : { left: pan, right: 0, top: 0, bottom: 0 };
+      panExtentRef.current = { left: pan, right: 0, top: 0, bottom: 0 };
       sceneRef.current?.setPanExtent(panExtentRef.current);
       setListLayout({
-        tall,
         pan,
         right: window.innerWidth - (r.left + listRight),
-        top: r.top + r.height / 2,
-        panY,
-        bottom: r.top + listBottom,
-        left: r.left + tallTextLeft(r.width),
-        width: tallTextWidth(r.width),
+        // Level with the logo where it rests (the middle of what's on screen).
+        top: r.top + r.height / 2 + restY,
       });
     };
     place();
@@ -325,9 +291,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    panRef.current = [panX, panY];
-    sceneRef.current?.setPan(panX, panY);
-  }, [panX, panY]);
+    panRef.current = [panX, 0];
+    sceneRef.current?.setPan(panX, 0);
+  }, [panX]);
 
   // No drawing while the artists, the info, the gallery, the calendar or the
   // contact form are showing. The ink stays under the artist list and the
@@ -353,15 +319,7 @@ function App() {
 
   return (
     <>
-      <div
-        ref={containerRef}
-        className={`scene${overSheet(view, artistSlug) ? " dim" : ""}`}
-      />
-      {/* While the paper is being made, its name in the middle of the empty
-          sheet; it fades away as the paper comes in. */}
-      <div className={`opening${ready ? " gone" : ""}`} aria-hidden={ready}>
-        life is beautiful
-      </div>
+      <div ref={containerRef} className="scene" />
       {/* Behind the header's menu on a phone: blurs the page, and a tap on it
           closes the menu. */}
       <div
@@ -403,16 +361,18 @@ function App() {
           <span />
         </button>
         <nav id="site-nav">
-          {NAV.map(([item, label], i) => (
+          {NAV.map(([item, label, url], i) => (
             <a
               key={item}
-              href={`#${item}`}
+              href={url ?? `#${item}`}
+              {...(url && { target: "_blank", rel: "noreferrer" })}
               // The label again, for the width its bold self takes (index.css).
               data-label={label}
               className={section === item ? "active" : undefined}
               style={{ "--i": i }}
               onClick={(e) => {
                 setMenuOpen(false);
+                if (url) return;
                 // Clicking the open view's link again closes it (from an
                 // artist's page, it goes back to the list; from an event
                 // filling the screen, back to the calendar).
@@ -431,16 +391,8 @@ function App() {
       </header>
       <ul
         ref={listRef}
-        className={`artists${view === "artists" ? " open" : ""}${listLayout.tall ? " tall" : ""}${ready ? " ready" : ""}`}
-        style={
-          listLayout.tall
-            ? {
-                left: listLayout.left,
-                width: listLayout.width,
-                top: listLayout.bottom,
-              }
-            : { right: listLayout.right, top: listLayout.top }
-        }
+        className={`artists${view === "artists" ? " open" : ""}${ready ? " ready" : ""}`}
+        style={{ right: listLayout.right, top: listLayout.top }}
         aria-hidden={view !== "artists"}
       >
         {artists.map(({ name, slug }, i) => (

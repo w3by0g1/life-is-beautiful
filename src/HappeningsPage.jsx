@@ -307,7 +307,9 @@ export default function HappeningsPage({
       <div className="hp-grid">
         {DAYS.map((d) => (
           <div key={d} className="hp-dayname">
-            {d.slice(0, 3)}
+            {/* In full, or shortened where the columns are narrow (index.css). */}
+            <span className="hp-long">{d}</span>
+            <span className="hp-short">{d.slice(0, 3)}</span>
           </div>
         ))}
         {gcells.map((d, i) => {

@@ -48,8 +48,10 @@ const MOVE = 1
 // sheet is panned right and down; pen: draws other people's strokes, as begin(id, clientX,
 // clientY, timeStamp, ageSeconds), move(id, clientX, clientY, timeStamp) and
 // end(id); penStyle: the pen the user is drawing with (sent with their
-// strokes); onClear: wipes the sheet (when it's cleared for everyone).
-export function createLiveSketch({ element, offset, offsetY = () => 0, pen, penStyle, onClear }) {
+// strokes); onClear: wipes the sheet (when it's cleared for everyone);
+// onLoaded: told once, on connecting, whether anyone's drawing is on the sheet
+// (false too if live drawing can't be reached).
+export function createLiveSketch({ element, offset, offsetY = () => 0, pen, penStyle, onClear, onLoaded }) {
   const clientId = Math.random().toString(36).slice(2, 12)
   let fb = null
   let db = null
@@ -292,11 +294,26 @@ export function createLiveSketch({ element, offset, offsetY = () => 0, pen, penS
       // Everything from the last STROKE_LIFETIME, then new strokes as they come.
       const recent = fb.query(fb.ref(db, 'strokes'), fb.orderByChild('t'), fb.startAt(serverNow() - STROKE_LIFETIME()))
       unsubscribes.push(fb.onChildAdded(recent, onStroke))
+      // Whether any of them is from since the sheet was last cleared.
+      Promise.all([fb.get(fb.ref(db, 'clearedAt')), fb.get(recent)])
+        .then(([cleared, strokes]) => {
+          const since = cleared.val() ?? 0
+          let any = false
+          strokes.forEach((s) => {
+            if ((s.val()?.t ?? 0) > since) any = true
+            return any
+          })
+          if (!disposed) onLoaded?.(any)
+        })
+        .catch(() => !disposed && onLoaded?.(false))
       tidy()
       const tidyTimer = setInterval(tidy, 60000)
       unsubscribes.push(() => clearInterval(tidyTimer))
     })
-    .catch((err) => console.warn('Live drawing is unavailable:', err))
+    .catch((err) => {
+      console.warn('Live drawing is unavailable:', err)
+      if (!disposed) onLoaded?.(false)
+    })
 
   return {
     // Wraps a DOM pointer listener so the user's own strokes are sent.
