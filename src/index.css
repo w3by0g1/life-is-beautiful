@@ -1768,19 +1768,9 @@ body {
   }
 }
 
-/* The site's name at the left of the header, the way home: a recorded
-   drawing of it (see Signature.jsx), or the logo; either in the header's
-   paper-coloured halo. */
+/* The logo at the left of the header, the way home. */
 .site-name {
   flex: none;
-  font-size: 15px;
-  font-weight: 500;
-  white-space: nowrap;
-  text-shadow:
-    0 0 2px var(--paper),
-    0 0 4px var(--paper),
-    0 0 8px var(--paper),
-    0 1px 16px var(--paper);
 }
 
 /* The logo, its halo following its lines (drop-shadow traces the
@@ -1790,51 +1780,6 @@ body {
   width: 56px;
   height: 56px;
   filter: drop-shadow(0 0 1px var(--paper)) drop-shadow(0 0 3px var(--paper)) drop-shadow(0 0 10px var(--paper));
-}
-
-/* The drawing (see Signature.jsx), at a fixed height: each step of the nib
-   is filled, and outlined with a hairline so the strokes along the nib's
-   slant don't vanish. */
-.signature {
-  display: block;
-  /* A little lower than the links' middle, clear of the top edge. */
-  position: relative;
-  top: 10px;
-  height: 65px;
-  width: calc(65px * var(--aspect, 3.5));
-  overflow: visible;
-  fill: currentColor;
-  stroke: currentColor;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 0 1px var(--paper)) drop-shadow(0 0 3px var(--paper)) drop-shadow(0 0 8px var(--paper));
-  transition: opacity 1.5s ease-in-out;
-}
-
-/* Fading away slowly before the next is written out. */
-.signature.clearing {
-  opacity: 0;
-}
-
-/* Each step shows at the moment it was drawn (its delay is set in
-   Signature.jsx), once the header has appeared. */
-.signature path {
-  animation: signature-step 0.05s linear both;
-}
-
-.site-header:not(.ready) .signature path {
-  animation-play-state: paused;
-}
-
-@keyframes signature-step {
-  from {
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .signature path {
-    animation: none;
-  }
 }
 
 .hint {

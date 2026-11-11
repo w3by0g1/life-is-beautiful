@@ -1,7 +1,7 @@
 import introBank from './assets/intro-path.json'
 
 // Records drawing sessions into a bank. They aren't replayed on the sheet at
-// random any more (the header shows one; see Signature.jsx). One is played
+// random any more. One is played
 // when a visitor arrives to an empty sheet (the welcome; see paperScene.js,
 // and play() below), and any can be played from the dev panel's list. A
 // replay is a second "ghost" pen: it draws ink and presses the logo but
@@ -28,7 +28,7 @@ const UP = 2
 
 // The saved recordings, as lists of [type, ms, x, y] events. (Older files held
 // a single recording.)
-export function recordingsIn(saved) {
+function recordingsIn(saved) {
   if (saved?.recordings) return saved.recordings.map((r) => r.events).filter((e) => e?.length)
   if (saved?.events?.length) return [saved.events]
   return []

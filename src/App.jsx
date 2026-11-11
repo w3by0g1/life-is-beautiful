@@ -14,7 +14,6 @@ import InfoText from "./InfoText.jsx";
 import HappeningsPage from "./HappeningsPage.jsx";
 import ContactPage from "./ContactPage.jsx";
 import GalleryPage from "./GalleryPage.jsx";
-import Signature from "./Signature.jsx";
 import headerLogoUrl from "./assets/header-logo.png";
 import logoUrl from "./assets/logo.jpg";
 
@@ -63,11 +62,6 @@ const overSheet = (view, slug) =>
 // writing set over it.
 const inkShownIn = (view, slug) =>
   view === "home" || overSheet(view, slug) ? 1 : 0;
-
-// The site's logo, at the left of the header when it isn't showing a drawing.
-const HeaderLogo = () => (
-  <img className="header-logo" src={headerLogoUrl} alt="" draggable={false} />
-);
 
 // Shown until the info text loads from Sanity (or if it can't).
 const INFO_FALLBACK = [
@@ -131,9 +125,6 @@ function App() {
   // Whether the header's menu is open (on a phone the links are behind a
   // button; see index.css).
   const [menuOpen, setMenuOpen] = useState(false);
-  // Whether the header shows the site's name as a drawing (see Signature.jsx)
-  // or as text: a setting in Sanity, the drawing until it says otherwise.
-  const [headerDrawing, setHeaderDrawing] = useState(true);
   // Where the sheet rests (see the layout below), kept for the scene when it
   // is made.
   const restRef = useRef(0);
@@ -151,12 +142,8 @@ function App() {
     // How long a drawing stays is a setting in Sanity, and the ink is timed
     // from it, so it's read before the sheet is made. If it's slow to answer
     // the paper doesn't wait: the built-in lifespan stands for this visit.
-    const settings = fetchSettings().catch(() => null);
-    settings.then(
-      (s) => !cancelled && setHeaderDrawing(s?.headerDrawing !== false),
-    );
     Promise.race([
-      settings,
+      fetchSettings().catch(() => null),
       new Promise((resolve) => setTimeout(resolve, SETTINGS_WAIT, null)),
     ])
       .then(
@@ -343,11 +330,12 @@ function App() {
             goHome();
           }}
         >
-          {headerDrawing ? (
-            <Signature fallback={<HeaderLogo />} />
-          ) : (
-            <HeaderLogo />
-          )}
+          <img
+            className="header-logo"
+            src={headerLogoUrl}
+            alt=""
+            draggable={false}
+          />
         </a>
         <button
           type="button"
