@@ -413,6 +413,19 @@ body {
   font-weight: 550;
 }
 
+/* Each name keeps room for itself in bold (an invisible, zero-height bold
+   copy), so bolding one on hover never widens the list: it's placed by its
+   right edge, so a wider list would shift every name left. */
+.artists li::after {
+  content: attr(data-label);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  font-weight: 550;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .artists a {
   color: inherit;
   text-decoration: none;

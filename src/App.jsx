@@ -382,7 +382,7 @@ function App() {
         aria-hidden={view !== "artists"}
       >
         {artists.map(({ name, slug }, i) => (
-          <li key={slug ?? name} style={{ "--i": i }}>
+          <li key={slug ?? name} style={{ "--i": i }} data-label={name}>
             <a
               href={href(artistPath(slug ?? name))}
               onClick={(e) => followLink(e, artistPath(slug ?? name))}
